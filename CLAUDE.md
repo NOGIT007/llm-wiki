@@ -44,12 +44,13 @@ tags:
 ### Queue & Config Files
 
 - `.wiki-queue.json` — pending actions queued from the UI (ingest requests, fix-issues)
-- `.wiki-config.json` — settings (e.g. `autoIngest: true`)
+- `.wiki-config.json` — settings (e.g. `autoIngest: true`, `autoPush: true`)
 
 **On conversation start**, check the queue:
 1. Read `.wiki-queue.json` — if it has items, process them
 2. Read `.wiki-config.json` — if `autoIngest` is true, ingest any pending raw files
-3. After processing, clear the queue via `DELETE /api/queue`
+3. If `autoPush` is true, after ingestion commit + push changes via a PR branch
+4. After processing, clear the queue via `DELETE /api/queue`
 
 ## Workflows
 

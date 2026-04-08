@@ -1,3 +1,5 @@
 {
-  "autoIngest": true
+  "autoIngest": true,
+  "githubUrl": "https://github.com/NOGIT007/llm-wiki",
+  "autoPush": false
 }

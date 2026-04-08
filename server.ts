@@ -317,6 +317,110 @@ const server = Bun.serve({
       return Response.json({ ok: true }, { headers: NO_CACHE });
     }
 
+    // ── Chat endpoint (uses Claude CLI) ──
+    if (url.pathname === "/api/chat" && req.method === "POST") {
+      const body = await req.json() as { message: string };
+      if (!body.message) {
+        return Response.json({ error: "No message provided" }, { status: 400 });
+      }
+
+      // Search wiki for relevant context
+      const results = searchPages(body.message);
+      const topSlugs = results.slice(0, 8).map(r => r.slug);
+
+      const words = body.message.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+      for (const word of words) {
+        for (const r of searchPages(word)) {
+          if (!topSlugs.includes(r.slug) && topSlugs.length < 12) {
+            topSlugs.push(r.slug);
+          }
+        }
+      }
+
+      let context = "";
+      for (const slug of topSlugs) {
+        const page = pages.get(slug);
+        if (!page) continue;
+        context += `\n---\n## [[${page.title}]] (${page.type})\n${page.content.slice(0, 1500)}\n`;
+      }
+
+      const prompt = `You are a wiki assistant. Answer using ONLY the wiki context below. Use [[Page Title]] wikilinks when citing pages. Be concise. If the answer isn't in the wiki, say so.
+
+## Wiki Context (${topSlugs.length} pages)
+${context}
+
+## Question
+${body.message}`;
+
+      try {
+        const proc = Bun.spawn(["claude", "-p", prompt], {
+          cwd: import.meta.dir,
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+
+        const output = await new Response(proc.stdout).text();
+        const exitCode = await proc.exited;
+
+        if (exitCode !== 0) {
+          const errOut = await new Response(proc.stderr).text();
+          return Response.json({ error: errOut || "Claude CLI failed" }, { status: 500 });
+        }
+
+        return Response.json({ answer: output.trim(), sources: topSlugs }, { headers: NO_CACHE });
+      } catch (err: any) {
+        return Response.json({ error: `Claude CLI not found or failed: ${err.message}` }, { status: 500 });
+      }
+    }
+
+    // ── Backup (git push via PR) ──
+    if (url.pathname === "/api/backup" && req.method === "POST") {
+      const body = (await req.json().catch(() => ({}))) as { message?: string };
+      const msg = body.message || "Wiki backup";
+      const branch = `backup/${new Date().toISOString().slice(0, 10)}-${Date.now().toString(36)}`;
+      const cwd = import.meta.dir;
+
+      const run = async (cmd: string[]) => {
+        const p = Bun.spawn(cmd, { cwd, stdout: "pipe", stderr: "pipe" });
+        const out = await new Response(p.stdout).text();
+        const err = await new Response(p.stderr).text();
+        const code = await p.exited;
+        if (code !== 0) throw new Error(err || out || `Exit code ${code}`);
+        return out.trim();
+      };
+
+      try {
+        // Check if there are changes
+        const status = await run(["git", "status", "--porcelain"]);
+        if (!status) {
+          return Response.json({ ok: true, message: "Nothing to backup — no changes" }, { headers: NO_CACHE });
+        }
+
+        // Create branch, commit, push, PR
+        await run(["git", "checkout", "-b", branch]);
+        await run(["git", "add", "-A"]);
+        await run(["git", "commit", "-m", msg]);
+        await run(["git", "push", "-u", "origin", branch]);
+
+        let prUrl = "";
+        try {
+          prUrl = await run(["gh", "pr", "create", "--title", msg, "--body", `Automated wiki backup\n\n${status}`, "--base", "main"]);
+        } catch (e: any) {
+          // PR creation failed but push succeeded
+          prUrl = e.message;
+        }
+
+        // Return to main
+        await run(["git", "checkout", "main"]);
+
+        return Response.json({ ok: true, branch, prUrl, changes: status.split("\n").length }, { headers: NO_CACHE });
+      } catch (err: any) {
+        // Try to get back to main on error
+        try { await run(["git", "checkout", "main"]); } catch {}
+        return Response.json({ error: err.message }, { status: 500 });
+      }
+    }
+
     // ── Raw source endpoints ──
 
     // List raw files
