@@ -35,11 +35,27 @@ tags:
 - Source summaries: `src-<slug>.md` (e.g. `src-attention-is-all-you-need.md`)
 - Every page should link to related pages — no orphans
 
+## Server & UI
+
+- Server: `bun run server.ts` (port 5000), control via `./wiki.sh start|stop|restart|status`
+- UI: `http://localhost:5000` — Graph, Page, and Manage views
+- Add Source: UI modal (paste, upload, URL) saves to `raw/` and auto-queues ingestion
+
+### Queue & Config Files
+
+- `.wiki-queue.json` — pending actions queued from the UI (ingest requests, fix-issues)
+- `.wiki-config.json` — settings (e.g. `autoIngest: true`)
+
+**On conversation start**, check the queue:
+1. Read `.wiki-queue.json` — if it has items, process them
+2. Read `.wiki-config.json` — if `autoIngest` is true, ingest any pending raw files
+3. After processing, clear the queue via `DELETE /api/queue`
+
 ## Workflows
 
 ### Ingest
 
-Triggered when the user adds a source to `raw/` and asks to ingest it.
+Triggered when the user adds a source to `raw/` and asks to ingest it, or when queued via the UI.
 
 1. Read the source from `raw/`
 2. Discuss key takeaways with the user

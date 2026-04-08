@@ -1,3 +1,7 @@
 .env
 .DS_Store
 plans/
+.claude/
+.playwright-cli/
+/tmp/
+*.log
