@@ -9,7 +9,7 @@ raw/            # Raw sources — immutable, never modify. Read only.
 wiki/           # LLM-owned markdown pages. Create, update, delete freely.
 wiki/index.md   # Content catalog — all pages listed with summaries
 wiki/log.md     # Chronological activity log
-vault/          # Private wiki pages — gitignored, never committed. Same format as wiki/.
+vaults/         # Additional vaults — gitignored. Each vault has its own wiki/ and raw/.
 ```
 
 ## Page Format
@@ -45,9 +45,9 @@ tags:
 
 The Chat view queries the wiki via LLM. Model selection (Mistral default, Claude, Gemini) is in the chat input bar. Preference saved to `.wiki-config.json` as `chatModel`.
 
-### Vault
+### Vaults
 
-Pages in `vault/` are private — loaded alongside `wiki/` pages but excluded from git. Move pages between wiki and vault via the toggle button in page view or `POST /api/vault/move`.
+Obsidian-style multi-vault support. The default vault is `wiki/` + `raw/`. Additional vaults live under `vaults/{name}/wiki/` + `vaults/{name}/raw/` (gitignored). Create vaults from Manage view or `POST /api/vaults`. Switch vaults via the header dropdown. All API endpoints accept `?vault=name` to scope to a specific vault.
 
 ### Backup
 

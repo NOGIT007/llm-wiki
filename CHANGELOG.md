@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.12] — 2026-04-09
+
+![v0.12](changelogs/v0.12-the-multiverse-of-markdown.svg)
+
+### The Multiverse of Markdown
+
+The one where the wiki learns that one knowledge base is never enough — Obsidian-style multi-vault support arrives.
+
+### Added
+- **Multi-vault support**: Create and switch between independent knowledge bases (vaults), each with its own wiki pages, sources, and graph
+- **Vault management API**: `GET /api/vaults`, `POST /api/vaults`, `DELETE /api/vaults/:name`
+- **Vault-scoped endpoints**: All API endpoints accept `?vault=name` parameter
+- **Vault selector**: Header dropdown to switch active vault (persisted in localStorage)
+- **Vault section in Manage view**: List vaults, create new ones
+
+### Changed
+- Replaced "private pages" vault feature with Obsidian-style multi-vault
+- `buildGraphData()` and `searchPages()` now accept explicit pages parameter
+- `gatherChatContext()` scoped to active vault
+- Backup includes all vaults under `vaults/` directory
+- `.gitignore`: `vault/` → `vaults/`
+
+### Removed
+- Private pages vault feature (vault: boolean, lock icons, move button)
+- `/api/vault/move` endpoint
+
+---
+
 ## [0.11] — 2026-04-09
 
 ![v0.11](changelogs/v0.11-the-vault-of-forgotten-tokens.svg)
