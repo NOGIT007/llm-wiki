@@ -338,7 +338,7 @@
 <header>
   <div class="logo-icon">W</div>
   <h1>LLM Wiki</h1>
-  <span class="subtitle">v0.10 — Architecture</span>
+  <span class="subtitle">v0.14 — Architecture</span>
   <a href="/" class="back-link">Back to Wiki</a>
 </header>
 
@@ -412,7 +412,7 @@
         <div class="layer-content">
           <div class="box">
             <div class="box-title"><span class="dot" style="background:var(--green)"></span>Bun HTTP Server</div>
-            <div class="box-desc">Single-file TypeScript server (server.ts, ~390 lines). Serves the UI, exposes REST API, parses YAML frontmatter, and extracts [[wikilinks]]. Auto-reloads wiki data every 5 seconds.</div>
+            <div class="box-desc">Single-file TypeScript server (server.ts, ~740 lines). Serves the UI, exposes REST API, parses YAML frontmatter, extracts [[wikilinks]], LLM chat integration, multi-vault support, and GCS backup. Auto-reloads wiki data every 5 seconds.</div>
             <div class="box-tech">
               <span class="tag green">Bun.serve()</span>
               <span class="tag green">TypeScript</span>
@@ -573,13 +573,13 @@
     <h3>Project Structure</h3>
     <div class="file-tree">
 <span class="dir">llm-wiki/</span>
-├── <span class="special">server.ts</span>         <span class="comment">  # Bun HTTP server — API + static serving (~390 lines)</span>
+├── <span class="special">server.ts</span>         <span class="comment">  # Bun HTTP server — API + static serving (~740 lines)</span>
 ├── <span class="special">wiki.sh</span>           <span class="comment">  # Server lifecycle (start/stop/restart/status)</span>
 ├── <span class="file">CLAUDE.md</span>          <span class="comment">  # LLM instructions — the "brain's" operating manual</span>
 ├── <span class="file">CHANGELOG.md</span>       <span class="comment">  # Release notes with random coding titles</span>
-├── <span class="file">VERSION</span>            <span class="comment">  # Current version (0.10)</span>
+├── <span class="file">VERSION</span>            <span class="comment">  # Current version (0.14)</span>
 ├── <span class="dir">public/</span>
-│   ├── <span class="special">index.html</span>    <span class="comment">  # Monolithic SPA — graph, reader, manager (~3450 lines)</span>
+│   ├── <span class="special">index.html</span>    <span class="comment">  # Monolithic SPA — graph, page, chat, manager (~3620 lines)</span>
 │   └── <span class="special">architecture.html</span> <span class="comment"># You are here</span>
 ├── <span class="dir">wiki/</span>              <span class="comment">  # LLM-owned pages (56 markdown files)</span>
 │   ├── <span class="file">index.md</span>      <span class="comment">  # Content catalog — all pages with summaries</span>

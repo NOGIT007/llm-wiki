@@ -1,410 +1,26 @@
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
-
-const WIKI_DIR = join(import.meta.dir, "wiki");
-const RAW_DIR = join(import.meta.dir, "raw");
-const VAULTS_DIR = join(import.meta.dir, "vaults");
-const CONFIG_FILE = join(import.meta.dir, ".wiki-config.json");
-const QUEUE_FILE = join(import.meta.dir, ".wiki-queue.json");
-const NO_CACHE = {
-  "cache-control": "no-store, no-cache, must-revalidate",
-  "pragma": "no-cache",
-};
-
-// ── LLM Chat configuration ──
-const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || "";
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
-
-const WIKI_CHAT_SYSTEM_PROMPT = `You are a helpful assistant for a personal knowledge base wiki. Answer questions based on the provided wiki context. Cite pages using [[wikilinks]] format. Be concise and accurate. If the context doesn't contain enough information, say so honestly.`;
-
-// ── Multi-vault support ──
-
-interface VaultInfo {
-  name: string;
-  wikiDir: string;
-  rawDir: string;
-}
-
-const DEFAULT_VAULT: VaultInfo = { name: "default", wikiDir: WIKI_DIR, rawDir: RAW_DIR };
-
-function sanitizeVaultName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-}
-
-function resolveVault(name?: string | null): VaultInfo {
-  if (!name || name === "default") return DEFAULT_VAULT;
-  const safeName = sanitizeVaultName(name);
-  if (!safeName) return DEFAULT_VAULT;
-  const wikiDir = resolve(VAULTS_DIR, safeName, "wiki");
-  const rawDir = resolve(VAULTS_DIR, safeName, "raw");
-  if (!wikiDir.startsWith(VAULTS_DIR) || !rawDir.startsWith(VAULTS_DIR)) return DEFAULT_VAULT;
-  return { name: safeName, wikiDir, rawDir };
-}
-
-interface WikiPage {
-  slug: string;
-  title: string;
-  type: string;
-  created: string;
-  updated: string;
-  tags: string[];
-  sources: string[];
-  content: string;
-  links: string[];
-}
-
-function parseFrontmatter(raw: string): {
-  meta: Record<string, any>;
-  content: string;
-} {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return { meta: {}, content: raw };
-
-  const meta: Record<string, any> = {};
-  let currentKey = "";
-  let inArray = false;
-
-  for (const line of match[1].split("\n")) {
-    const kvMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
-    if (kvMatch) {
-      const [, key, value] = kvMatch;
-      if (value === "") {
-        meta[key] = [];
-        currentKey = key;
-        inArray = true;
-      } else {
-        meta[key] = value.replace(/^["']|["']$/g, "");
-        inArray = false;
-      }
-    } else if (inArray && line.match(/^\s+-\s+/)) {
-      const val = line.replace(/^\s+-\s+/, "").replace(/^["']|["']$/g, "");
-      meta[currentKey].push(val);
-    }
-  }
-
-  return { meta, content: match[2] };
-}
-
-function extractWikilinks(text: string): string[] {
-  const links = new Set<string>();
-  const re = /\[\[([^\]]+)\]\]/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    const target = m[1].split("|")[0].trim();
-    links.add(target.toLowerCase().replace(/\s+/g, "-"));
-  }
-  return [...links];
-}
-
-async function loadDir(dir: string, pages: Map<string, WikiPage>) {
-  const files = await readdir(dir).catch(() => [] as string[]);
-  for (const file of files) {
-    if (!file.endsWith(".md") || file === "index.md" || file === "log.md") continue;
-    const raw = await readFile(join(dir, file), "utf-8");
-    const slug = file.replace(/\.md$/, "");
-    const { meta, content } = parseFrontmatter(raw);
-    const links = extractWikilinks(content);
-    if (Array.isArray(meta.sources)) {
-      for (const s of meta.sources) links.push(...extractWikilinks(s));
-    }
-    pages.set(slug, {
-      slug,
-      title: meta.title || slug,
-      type: meta.type || "unknown",
-      created: meta.created || "",
-      updated: meta.updated || "",
-      tags: Array.isArray(meta.tags) ? meta.tags : [],
-      sources: Array.isArray(meta.sources) ? meta.sources : [],
-      content,
-      links: [...new Set(links)],
-    });
-  }
-}
-
-async function loadVault(v: VaultInfo): Promise<Map<string, WikiPage>> {
-  const pages = new Map<string, WikiPage>();
-  await loadDir(v.wikiDir, pages);
-  return pages;
-}
-
-// Per-vault page storage
-const vaultPages = new Map<string, Map<string, WikiPage>>();
-const hiddenVaults = new Set<string>(); // Vaults "deleted" but still on disk
-
-function getPages(vaultName?: string | null): Map<string, WikiPage> {
-  return vaultPages.get(vaultName || "default") || new Map();
-}
-
-let lastLoad = Date.now();
-
-async function reloadAllVaults() {
-  vaultPages.set("default", await loadVault(DEFAULT_VAULT));
-  if (existsSync(VAULTS_DIR)) {
-    for (const d of await readdir(VAULTS_DIR)) {
-      if (hiddenVaults.has(d)) continue;
-      const v = resolveVault(d);
-      if (existsSync(v.wikiDir)) vaultPages.set(d, await loadVault(v));
-    }
-  }
-  lastLoad = Date.now();
-}
-
-async function reloadIfNeeded() {
-  if (Date.now() - lastLoad > 5000) await reloadAllVaults();
-}
+import { join } from "node:path";
+import { CONFIG_FILE, QUEUE_FILE, PUBLIC_DIR, NO_CACHE } from "./src/paths";
+import { resolveVault, sanitizeVaultName, loadVault, vaultPages, hiddenVaults, saveHiddenVaults, getPages, reloadAllVaults, reloadIfNeeded, listVaults } from "./src/vaults";
+import { buildGraphData, searchPages } from "./src/search";
+import { gatherChatContext, callLLM, isModelAvailable, getAvailableModels, WIKI_CHAT_SYSTEM_PROMPT } from "./src/chat";
+import { backupStatus, runBackup, GCS_BUCKET } from "./src/backup";
+import { withFileLock } from "./src/filelock";
 
 // Initial load
 await reloadAllVaults();
 
-function buildGraphData(pages: Map<string, WikiPage>) {
-  const nodes: { id: string; title: string; type: string; links: number }[] = [];
-  const edges: { source: string; target: string }[] = [];
-  const slugs = new Set(pages.keys());
-
-  for (const [slug, page] of pages) {
-    nodes.push({
-      id: slug,
-      title: page.title,
-      type: page.type,
-      links: page.links.length,
-    });
-    for (const link of page.links) {
-      if (slugs.has(link) && link !== slug) {
-        edges.push({ source: slug, target: link });
-      }
-    }
-  }
-
-  return { nodes, edges };
-}
-
-function searchPages(query: string, pages: Map<string, WikiPage>) {
-  const q = query.toLowerCase();
-  const results: { slug: string; title: string; type: string; score: number }[] = [];
-
-  for (const [slug, page] of pages) {
-    let score = 0;
-    if (page.title.toLowerCase().includes(q)) score += 10;
-    if (slug.includes(q)) score += 5;
-    if (page.tags.some((t) => t.includes(q))) score += 3;
-    if (page.content.toLowerCase().includes(q)) score += 1;
-    if (score > 0) results.push({ slug, title: page.title, type: page.type, score });
-  }
-
-  return results.sort((a, b) => b.score - a.score);
-}
-
-// ── LLM Chat helpers ──
-
-function gatherChatContext(query: string, pages: Map<string, WikiPage>): { context: string; sources: string[] } {
-  // Search with full query + individual keywords for broader matches
-  const allResults = searchPages(query, pages);
-  const seen = new Set(allResults.map(r => r.slug));
-  const stopwords = new Set(["what","is","the","a","an","and","or","for","are","but","not","you","all","can","was","one","how","which","their","will","each","about","with","this","that","from","have","been","does","do","where","when","why","who"]);
-  const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 3 && !stopwords.has(w.replace(/[?.,!]/g, "")));
-  for (const word of words) {
-    for (const r of searchPages(word.replace(/[?.,!]/g, ""), pages)) {
-      if (!seen.has(r.slug)) { seen.add(r.slug); allResults.push(r); }
-    }
-  }
-  allResults.sort((a, b) => b.score - a.score);
-  const results = allResults.slice(0, 5);
-  const sources: string[] = [];
-  const parts: string[] = [];
-  let charBudget = 6000;
-
-  for (const r of results) {
-    const p = pages.get(r.slug);
-    if (!p) continue;
-    const text = `## [[${p.slug}]] — ${p.title}\n${p.content}`;
-    if (parts.join('\n\n').length + text.length > charBudget) {
-      const remaining = charBudget - parts.join('\n\n').length;
-      if (remaining > 200) {
-        parts.push(text.slice(0, remaining) + '\n...(truncated)');
-        sources.push(p.slug);
-      }
-      break;
-    }
-    parts.push(text);
-    sources.push(p.slug);
-  }
-
-  return { context: parts.join('\n\n'), sources };
-}
-
-async function callMistral(system: string, user: string): Promise<string> {
-  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
-    method: "POST",
-    headers: { "authorization": `Bearer ${MISTRAL_API_KEY}`, "content-type": "application/json" },
-    body: JSON.stringify({
-      model: "mistral-small-latest",
-      messages: [{ role: "system", content: system }, { role: "user", content: user }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Mistral API error: ${res.status} ${await res.text()}`);
-  const d = await res.json() as any;
-  return d.choices[0].message.content;
-}
-
-async function callClaude(system: string, user: string): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system,
-      messages: [{ role: "user", content: user }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Claude API error: ${res.status} ${await res.text()}`);
-  const d = await res.json() as any;
-  return d.content[0].text;
-}
-
-async function callGemini(system: string, user: string): Promise<string> {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      system_instruction: { parts: [{ text: system }] },
-      contents: [{ parts: [{ text: user }] }],
-      generationConfig: { maxOutputTokens: 1024 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
-  const d = await res.json() as any;
-  return d.candidates[0].content.parts[0].text;
-}
-
-async function callLLM(model: string, system: string, user: string): Promise<string> {
-  if (model === "claude") return callClaude(system, user);
-  if (model === "gemini") return callGemini(system, user);
-  return callMistral(system, user);
-}
-
-// ── GCP Cloud Storage Backup ──
-const GCS_BUCKET = process.env.GOOGLE_CLOUD_STORAGE_BUCKET || "";
-
-interface BackupStatus {
-  lastBackup: string | null;
-  lastLabel: string | null;
-  filesUploaded: number;
-  inProgress: boolean;
-  error: string | null;
-}
-
-let backupStatus: BackupStatus = {
-  lastBackup: null, lastLabel: null, filesUploaded: 0, inProgress: false, error: null,
+// MIME types for static file serving
+const MIME_TYPES: Record<string, string> = {
+  ".html": "text/html",
+  ".css": "text/css",
+  ".js": "application/javascript",
+  ".json": "application/json",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".ico": "image/x-icon",
 };
-
-let cachedToken = { token: "", expiresAt: 0 };
-
-async function getAccessToken(): Promise<string> {
-  if (cachedToken.token && Date.now() < cachedToken.expiresAt) return cachedToken.token;
-  const proc = Bun.spawn(["gcloud", "auth", "application-default", "print-access-token"], {
-    stdout: "pipe", stderr: "pipe",
-  });
-  const token = (await new Response(proc.stdout).text()).trim();
-  const exitCode = await proc.exited;
-  if (exitCode !== 0 || !token) {
-    throw new Error("Failed to get GCP access token. Run: gcloud auth application-default login");
-  }
-  cachedToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
-  return token;
-}
-
-async function uploadToGCS(objectPath: string, content: string, token: string): Promise<void> {
-  const url = `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${encodeURIComponent(objectPath)}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "authorization": `Bearer ${token}`, "content-type": "text/plain; charset=utf-8" },
-    body: content,
-  });
-  if (!res.ok) throw new Error(`GCS upload failed for ${objectPath}: ${res.status}`);
-}
-
-async function uploadDirToGCS(dir: string, prefix: string, token: string): Promise<string[]> {
-  const manifest: string[] = [];
-  const files = await readdir(dir).catch(() => [] as string[]);
-  for (const f of files.filter(f => f.endsWith(".md"))) {
-    const content = await readFile(join(dir, f), "utf-8");
-    await uploadToGCS(`${prefix}/${f}`, content, token);
-    manifest.push(`${prefix}/${f}`);
-  }
-  return manifest;
-}
-
-async function runBackup(): Promise<void> {
-  if (!GCS_BUCKET) throw new Error("GOOGLE_CLOUD_STORAGE_BUCKET not set");
-  backupStatus.inProgress = true;
-  backupStatus.error = null;
-  try {
-    const token = await getAccessToken();
-    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-    const prefix = `backups/${ts}`;
-    const manifest: string[] = [];
-
-    // Backup default vault
-    manifest.push(...await uploadDirToGCS(WIKI_DIR, `${prefix}/wiki`, token));
-    manifest.push(...await uploadDirToGCS(RAW_DIR, `${prefix}/raw`, token));
-
-    // Backup additional vaults (skip hidden ones)
-    if (existsSync(VAULTS_DIR)) {
-      for (const d of await readdir(VAULTS_DIR)) {
-        if (hiddenVaults.has(d)) continue;
-        const v = resolveVault(d);
-        if (existsSync(v.wikiDir)) {
-          manifest.push(...await uploadDirToGCS(v.wikiDir, `${prefix}/vaults/${d}/wiki`, token));
-          manifest.push(...await uploadDirToGCS(v.rawDir, `${prefix}/vaults/${d}/raw`, token));
-        }
-      }
-    }
-
-    // Upload config files
-    for (const [name, path] of [[".wiki-config.json", CONFIG_FILE], [".wiki-queue.json", QUEUE_FILE]] as const) {
-      try {
-        const content = await readFile(path, "utf-8");
-        await uploadToGCS(`${prefix}/${name}`, content, token);
-        manifest.push(`${prefix}/${name}`);
-      } catch {}
-    }
-
-    await uploadToGCS(`${prefix}/manifest.json`, JSON.stringify({ timestamp: ts, files: manifest }, null, 2), token);
-
-    backupStatus = {
-      lastBackup: new Date().toISOString(),
-      lastLabel: ts,
-      filesUploaded: manifest.length,
-      inProgress: false,
-      error: null,
-    };
-  } catch (err: any) {
-    backupStatus.inProgress = false;
-    backupStatus.error = err.message;
-    throw err;
-  }
-}
-
-// ── Helper to list all vault names ──
-async function listVaults(): Promise<string[]> {
-  const names = ["default"];
-  if (existsSync(VAULTS_DIR)) {
-    const dirs = await readdir(VAULTS_DIR);
-    for (const d of dirs) {
-      if (!hiddenVaults.has(d) && existsSync(join(VAULTS_DIR, d, "wiki"))) names.push(d);
-    }
-  }
-  return names;
-}
 
 const server = Bun.serve({
   port: 5000,
@@ -413,18 +29,29 @@ const server = Bun.serve({
     const vaultParam = url.searchParams.get("vault");
     const vault = resolveVault(vaultParam);
 
-    // Serve HTML — always fresh from disk
+    // ── Static file serving ──
     if (url.pathname === "/") {
-      const html = await readFile(join(import.meta.dir, "public", "index.html"), "utf-8");
+      const html = await readFile(join(PUBLIC_DIR, "index.html"), "utf-8");
       return new Response(html, { headers: { "content-type": "text/html", ...NO_CACHE } });
     }
 
     if (url.pathname === "/architecture") {
-      const html = await readFile(join(import.meta.dir, "public", "architecture.html"), "utf-8");
+      const html = await readFile(join(PUBLIC_DIR, "architecture.html"), "utf-8");
       return new Response(html, { headers: { "content-type": "text/html", ...NO_CACHE } });
     }
 
-    // ── Vault management endpoints ──
+    // Serve static assets (CSS, JS, images)
+    if (url.pathname.startsWith("/js/") || url.pathname.endsWith(".css") || url.pathname.endsWith(".svg")) {
+      const filePath = join(PUBLIC_DIR, url.pathname);
+      if (existsSync(filePath)) {
+        const ext = url.pathname.substring(url.pathname.lastIndexOf("."));
+        const contentType = MIME_TYPES[ext] || "application/octet-stream";
+        const content = await readFile(filePath, "utf-8");
+        return new Response(content, { headers: { "content-type": contentType, ...NO_CACHE } });
+      }
+    }
+
+    // ── Vault management ──
     if (url.pathname === "/api/vaults" && req.method === "GET") {
       return Response.json(await listVaults(), { headers: NO_CACHE });
     }
@@ -435,9 +62,9 @@ const server = Bun.serve({
       const safeName = sanitizeVaultName(name);
       if (!safeName || safeName === "default") return Response.json({ error: "Cannot create vault named 'default'" }, { status: 400, headers: NO_CACHE });
       const v = resolveVault(safeName);
-      // If vault was previously hidden (deleted), un-hide and restore it
       if (hiddenVaults.has(safeName) && existsSync(v.wikiDir)) {
         hiddenVaults.delete(safeName);
+        await saveHiddenVaults();
         vaultPages.set(safeName, await loadVault(v));
         return Response.json({ ok: true, name: safeName }, { headers: NO_CACHE });
       }
@@ -459,16 +86,16 @@ const server = Bun.serve({
       if (!existsSync(v.wikiDir)) return Response.json({ error: "Vault not found" }, { status: 404, headers: NO_CACHE });
       vaultPages.delete(name);
       hiddenVaults.add(name);
+      await saveHiddenVaults();
       return Response.json({ ok: true, name }, { headers: NO_CACHE });
     }
 
-    // Reload wiki data endpoint
+    // ── Reload & Status ──
     if (url.pathname === "/api/reload") {
       await reloadAllVaults();
       return Response.json({ ok: true, pages: getPages(vaultParam).size, reloaded: new Date().toISOString() }, { headers: NO_CACHE });
     }
 
-    // Server status
     if (url.pathname === "/api/status") {
       const totalPages = [...vaultPages.values()].reduce((sum, m) => sum + m.size, 0);
       const perVault: Record<string, number> = {};
@@ -476,29 +103,24 @@ const server = Bun.serve({
         if (!hiddenVaults.has(name)) perVault[name] = pages.size;
       }
       return Response.json({
-        ok: true,
-        pages: totalPages,
-        perVault,
+        ok: true, pages: totalPages, perVault,
         vaults: vaultPages.size,
         uptime: Math.floor(process.uptime()),
-        lastLoad: new Date(lastLoad).toISOString(),
+        lastLoad: new Date().toISOString(),
       }, { headers: NO_CACHE });
     }
 
-    // Auto-reload wiki data periodically
+    // Auto-reload periodically
     await reloadIfNeeded();
-
-    // Resolve pages AFTER reload so we always get fresh data
     const pages = getPages(vaultParam);
 
+    // ── Data endpoints ──
     if (url.pathname === "/api/graph") {
       return Response.json(buildGraphData(pages), { headers: NO_CACHE });
     }
 
     if (url.pathname === "/api/pages") {
-      const list = [...pages.values()].map(({ slug, title, type, tags }) => ({
-        slug, title, type, tags,
-      }));
+      const list = [...pages.values()].map(({ slug, title, type, tags }) => ({ slug, title, type, tags }));
       return Response.json(list, { headers: NO_CACHE });
     }
 
@@ -514,7 +136,7 @@ const server = Bun.serve({
       return Response.json(searchPages(q, pages), { headers: NO_CACHE });
     }
 
-    // ── Wiki management endpoint ──
+    // ── Wiki health ──
     if (url.pathname === "/api/wiki/health") {
       const rawDir = vault.rawDir;
       const rawFiles = (await readdir(rawDir).catch(() => [] as string[])).filter(f => f.endsWith(".md")).sort();
@@ -545,15 +167,11 @@ const server = Bun.serve({
       }
 
       const inbound = new Set<string>();
-      for (const [, page] of pages) {
-        for (const link of page.links) inbound.add(link);
-      }
+      for (const [, page] of pages) { for (const link of page.links) inbound.add(link); }
       const orphans = [...pages.keys()].filter(s => !inbound.has(s));
 
       const typeCounts: Record<string, number> = {};
-      for (const page of pages.values()) {
-        typeCounts[page.type] = (typeCounts[page.type] || 0) + 1;
-      }
+      for (const page of pages.values()) { typeCounts[page.type] = (typeCounts[page.type] || 0) + 1; }
 
       return Response.json({
         raw: { total: rawFiles.length, ingested: ingestedList, pending: pendingRaw },
@@ -561,11 +179,10 @@ const server = Bun.serve({
       }, { headers: NO_CACHE });
     }
 
-    // ── Config endpoint ──
+    // ── Config ──
     if (url.pathname === "/api/config" && req.method === "GET") {
       try {
-        const raw = await readFile(CONFIG_FILE, "utf-8");
-        return Response.json(JSON.parse(raw), { headers: NO_CACHE });
+        return Response.json(JSON.parse(await readFile(CONFIG_FILE, "utf-8")), { headers: NO_CACHE });
       } catch {
         return Response.json({ autoIngest: false }, { headers: NO_CACHE });
       }
@@ -573,18 +190,19 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/config" && req.method === "POST") {
       const body = await req.json() as Record<string, any>;
-      let config: Record<string, any> = {};
-      try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
-      Object.assign(config, body);
-      await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
-      return Response.json({ ok: true, config }, { headers: NO_CACHE });
+      return withFileLock(async () => {
+        let config: Record<string, any> = {};
+        try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
+        Object.assign(config, body);
+        await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), "utf-8");
+        return Response.json({ ok: true, config }, { headers: NO_CACHE });
+      });
     }
 
-    // ── Queue endpoint ──
+    // ── Queue ──
     if (url.pathname === "/api/queue" && req.method === "GET") {
       try {
-        const raw = await readFile(QUEUE_FILE, "utf-8");
-        return Response.json(JSON.parse(raw), { headers: NO_CACHE });
+        return Response.json(JSON.parse(await readFile(QUEUE_FILE, "utf-8")), { headers: NO_CACHE });
       } catch {
         return Response.json([], { headers: NO_CACHE });
       }
@@ -594,14 +212,16 @@ const server = Bun.serve({
       const item = await req.json() as { action: string; target?: string; vault?: string; timestamp?: string };
       item.timestamp = new Date().toISOString();
       if (!item.vault) item.vault = vaultParam || undefined;
-      let queue: any[] = [];
-      try { queue = JSON.parse(await readFile(QUEUE_FILE, "utf-8")); } catch {}
-      const exists = queue.some(q => q.action === item.action && q.target === item.target && (q.vault || "default") === (item.vault || "default"));
-      if (!exists) {
-        queue.push(item);
-        await writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2), "utf-8");
-      }
-      return Response.json({ ok: true, queue }, { headers: NO_CACHE });
+      return withFileLock(async () => {
+        let queue: any[] = [];
+        try { queue = JSON.parse(await readFile(QUEUE_FILE, "utf-8")); } catch {}
+        const exists = queue.some(q => q.action === item.action && q.target === item.target && (q.vault || "default") === (item.vault || "default"));
+        if (!exists) {
+          queue.push(item);
+          await writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2), "utf-8");
+        }
+        return Response.json({ ok: true, queue }, { headers: NO_CACHE });
+      });
     }
 
     if (url.pathname === "/api/queue" && req.method === "DELETE") {
@@ -609,12 +229,11 @@ const server = Bun.serve({
       return Response.json({ ok: true }, { headers: NO_CACHE });
     }
 
-    // ── Raw source endpoints (vault-scoped) ──
+    // ── Raw sources ──
     if (url.pathname === "/api/raw" && req.method === "GET") {
       const rawDir = vault.rawDir;
       const files = await readdir(rawDir).catch(() => [] as string[]);
-      const mdFiles = files.filter(f => f.endsWith(".md")).sort();
-      return Response.json(mdFiles, { headers: NO_CACHE });
+      return Response.json(files.filter(f => f.endsWith(".md")).sort(), { headers: NO_CACHE });
     }
 
     if (url.pathname === "/api/raw" && req.method === "POST") {
@@ -627,8 +246,7 @@ const server = Bun.serve({
         const file = formData.get("file") as File | null;
         if (!file) return Response.json({ error: "No file provided" }, { status: 400 });
         const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
-        const content = await file.text();
-        await writeFile(join(rawDir, filename), content, "utf-8");
+        await writeFile(join(rawDir, filename), await file.text(), "utf-8");
         return Response.json({ ok: true, filename }, { headers: NO_CACHE });
       }
 
@@ -636,19 +254,25 @@ const server = Bun.serve({
 
       if (body.url) {
         try {
+          const parsed = new URL(body.url);
+          if (!["http:", "https:"].includes(parsed.protocol)) {
+            return Response.json({ error: "Only http and https URLs are allowed" }, { status: 400 });
+          }
+          const host = parsed.hostname.toLowerCase();
+          if (host === "localhost" || host === "127.0.0.1" || host === "0.0.0.0" || host === "::1"
+            || host.startsWith("10.") || host.startsWith("192.168.")
+            || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.endsWith(".local")
+            || host === "169.254.169.254" || host.startsWith("169.254.")) {
+            return Response.json({ error: "URLs pointing to private/internal addresses are not allowed" }, { status: 400 });
+          }
           const res = await fetch(body.url);
           if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
           const text = await res.text();
           const slug = (body.filename || body.url)
-            .replace(/^https?:\/\//, "")
-            .replace(/[^a-zA-Z0-9-]/g, "-")
-            .replace(/-+/g, "-")
-            .replace(/^-|-$/g, "")
-            .toLowerCase()
-            .slice(0, 80);
-          const filename = `${slug}.md`;
-          await writeFile(join(rawDir, filename), text, "utf-8");
-          return Response.json({ ok: true, filename }, { headers: NO_CACHE });
+            .replace(/^https?:\/\//, "").replace(/[^a-zA-Z0-9-]/g, "-")
+            .replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 80);
+          await writeFile(join(rawDir, `${slug}.md`), text, "utf-8");
+          return Response.json({ ok: true, filename: `${slug}.md` }, { headers: NO_CACHE });
         } catch (err: any) {
           return Response.json({ error: err.message }, { status: 400 });
         }
@@ -656,10 +280,8 @@ const server = Bun.serve({
 
       if (body.content && body.filename) {
         const filename = body.filename
-          .replace(/[^a-zA-Z0-9._-]/g, "-")
-          .toLowerCase()
-          .replace(/-+/g, "-")
-          .replace(/^-|-$/g, "");
+          .replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase()
+          .replace(/-+/g, "-").replace(/^-|-$/g, "");
         const safeName = filename.endsWith(".md") ? filename : `${filename}.md`;
         await writeFile(join(rawDir, safeName), body.content, "utf-8");
         return Response.json({ ok: true, filename: safeName }, { headers: NO_CACHE });
@@ -668,15 +290,11 @@ const server = Bun.serve({
       return Response.json({ error: "Missing content or filename" }, { status: 400 });
     }
 
-    // ── Chat endpoints ──
+    // ── Chat ──
     if (url.pathname === "/api/chat/models") {
       let config: any = {};
       try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
-      const models: { id: string; label: string }[] = [];
-      if (MISTRAL_API_KEY) models.push({ id: "mistral", label: "Mistral" });
-      if (ANTHROPIC_API_KEY) models.push({ id: "claude", label: "Claude" });
-      if (GEMINI_API_KEY) models.push({ id: "gemini", label: "Gemini" });
-      return Response.json({ models, default: config.chatModel || "mistral" }, { headers: NO_CACHE });
+      return Response.json({ models: getAvailableModels(), default: config.chatModel || "mistral" }, { headers: NO_CACHE });
     }
 
     if (url.pathname === "/api/chat" && req.method === "POST") {
@@ -689,8 +307,7 @@ const server = Bun.serve({
         try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
         const model = reqModel || config.chatModel || "mistral";
 
-        const keyMap: Record<string, string> = { mistral: MISTRAL_API_KEY, claude: ANTHROPIC_API_KEY, gemini: GEMINI_API_KEY };
-        if (!keyMap[model]) {
+        if (!isModelAvailable(model)) {
           return Response.json({ error: `No API key configured for ${model}` }, { status: 400, headers: NO_CACHE });
         }
 
@@ -707,9 +324,9 @@ const server = Bun.serve({
       }
     }
 
-    // ── Backup endpoints ──
+    // ── Backup ──
     if (url.pathname === "/api/backup/status") {
-      return Response.json(backupStatus, { headers: NO_CACHE });
+      return Response.json({ ...backupStatus, bucket: GCS_BUCKET || null }, { headers: NO_CACHE });
     }
 
     if (url.pathname === "/api/backup" && req.method === "POST") {
