@@ -204,7 +204,18 @@ function searchPages(query: string, pages: Map<string, WikiPage>) {
 // ── LLM Chat helpers ──
 
 function gatherChatContext(query: string, pages: Map<string, WikiPage>): { context: string; sources: string[] } {
-  const results = searchPages(query, pages).slice(0, 5);
+  // Search with full query + individual keywords for broader matches
+  const allResults = searchPages(query, pages);
+  const seen = new Set(allResults.map(r => r.slug));
+  const stopwords = new Set(["what","is","the","a","an","and","or","for","are","but","not","you","all","can","was","one","how","which","their","will","each","about","with","this","that","from","have","been","does","do","where","when","why","who"]);
+  const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 3 && !stopwords.has(w.replace(/[?.,!]/g, "")));
+  for (const word of words) {
+    for (const r of searchPages(word.replace(/[?.,!]/g, ""), pages)) {
+      if (!seen.has(r.slug)) { seen.add(r.slug); allResults.push(r); }
+    }
+  }
+  allResults.sort((a, b) => b.score - a.score);
+  const results = allResults.slice(0, 5);
   const sources: string[] = [];
   const parts: string[] = [];
   let charBudget = 6000;
@@ -404,7 +415,6 @@ const server = Bun.serve({
     const url = new URL(req.url);
     const vaultParam = url.searchParams.get("vault");
     const vault = resolveVault(vaultParam);
-    const pages = getPages(vaultParam);
 
     // Serve HTML — always fresh from disk
     if (url.pathname === "/") {
@@ -458,7 +468,7 @@ const server = Bun.serve({
         }
       }
       lastLoad = Date.now();
-      return Response.json({ ok: true, pages: pages.size, reloaded: new Date().toISOString() }, { headers: NO_CACHE });
+      return Response.json({ ok: true, pages: getPages(vaultParam).size, reloaded: new Date().toISOString() }, { headers: NO_CACHE });
     }
 
     // Server status
@@ -475,6 +485,9 @@ const server = Bun.serve({
 
     // Auto-reload wiki data periodically
     await reloadIfNeeded();
+
+    // Resolve pages AFTER reload so we always get fresh data
+    const pages = getPages(vaultParam);
 
     if (url.pathname === "/api/graph") {
       return Response.json(buildGraphData(pages), { headers: NO_CACHE });
@@ -678,8 +691,7 @@ const server = Bun.serve({
           return Response.json({ error: `No API key configured for ${model}` }, { status: 400, headers: NO_CACHE });
         }
 
-        await reloadIfNeeded();
-        const { context, sources } = gatherChatContext(message, pages);
+        const { context, sources } = gatherChatContext(message, getPages(vaultParam));
         const userPrompt = context
           ? `Wiki context:\n\n${context}\n\n---\nQuestion: ${message}`
           : `No relevant wiki pages found for context.\n\nQuestion: ${message}`;
