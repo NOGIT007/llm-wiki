@@ -4,6 +4,34 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.14] — 2026-04-09
+
+![v0.14](changelogs/v0.14-the-vault-locksmith.svg)
+
+### The Vault Locksmith
+
+The one where vaults learn to lock out path traversal, stop rising from the dead, and finally remember which vault you were talking to.
+
+### Security
+- **Path traversal prevention**: `?vault=` query param now sanitized and resolved paths validated to stay within `vaults/` directory
+
+### Fixed
+- **Ghost vaults**: Deleted vaults no longer reappear after 5-second reload cycle (hidden vaults set, respected in reload, listing, and backup)
+- **Queue vault context**: Ingestion queue now tracks which vault a source belongs to — files added in non-default vaults no longer get queued for default vault
+- **DELETE handler sanitization**: Vault name from URL now sanitized before use in memory operations
+- **Chat history isolation**: Chat history now scoped per vault in localStorage — switching vaults loads the correct history
+- **Vault re-creation guard**: Creating a vault that already exists returns 409 Conflict instead of silently overwriting index/log files
+
+### Added
+- Per-vault page counts in `/api/status` response (`perVault` field)
+- Previously hidden (deleted) vaults can be restored by re-creating with the same name
+
+### Changed
+- Extracted `DEFAULT_VAULT` constant and `reloadAllVaults()` helper — vault iteration logic deduplicated from 4 call sites into one
+- Backup now skips hidden (deleted) vaults
+
+---
+
 ## [0.13] — 2026-04-09
 
 ![v0.13](changelogs/v0.13-the-context-window-whisperer.svg)
