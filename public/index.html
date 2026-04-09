@@ -659,40 +659,19 @@
     color: var(--border);
   }
 
-  .vault-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    background: rgba(180, 160, 212, 0.15);
-    color: #b4a0d4;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 500;
-  }
-
-  .vault-lock {
-    color: #b4a0d4;
-    opacity: 0.7;
-    flex-shrink: 0;
-  }
-
-  .vault-move-btn {
-    background: var(--surface);
+  .vault-select {
+    padding: 6px 10px;
+    background: var(--bg);
     border: 1px solid var(--border);
+    border-radius: 6px;
     color: var(--text-secondary);
-    padding: 4px 12px;
-    border-radius: var(--radius-sm, 6px);
-    cursor: pointer;
+    font-family: var(--font-body);
     font-size: 12px;
-    font-family: inherit;
-    transition: border-color 200ms ease, color 200ms ease;
-    margin-left: 8px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 200ms ease;
   }
-  .vault-move-btn:hover {
-    border-color: #b4a0d4;
-    color: #b4a0d4;
-  }
+  .vault-select:focus { border-color: var(--accent); }
 
   /* ─── Page content typography ─── */
   #page-content {
@@ -1811,6 +1790,7 @@
       <div class="logo-icon">W</div>
       <h1>LLM Wiki</h1>
     </div>
+    <select id="vault-select" class="vault-select" onchange="switchVault(this.value)" title="Switch vault" style="display:none"></select>
     <button id="search-trigger" onclick="openSearch()">
       <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       <span>Search pages...</span>
@@ -1920,6 +1900,7 @@
           </label>
         </div>
         <div class="health-grid" id="health-grid"></div>
+        <div class="manage-section" id="section-vaults"></div>
         <div class="manage-section" id="section-backup"></div>
         <div class="manage-section" id="section-pending"></div>
         <div class="manage-section" id="section-sources"></div>
@@ -2127,7 +2108,7 @@ function doSearch() {
     return;
   }
   searchTimeout = setTimeout(async () => {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const res = await fetch(api(`/api/search?q=${encodeURIComponent(q)}`));
     const results = await res.json();
     searchResultSlugs = results.slice(0, 15).map(r => r.slug);
     if (results.length === 0) {
@@ -2278,11 +2259,56 @@ document.addEventListener('keydown', (e) => {
   }
 }, true);
 
+// ── Multi-vault support ──
+let activeVault = localStorage.getItem('activeVault') || 'default';
+
+function api(path) {
+  if (activeVault === 'default') return path;
+  const sep = path.includes('?') ? '&' : '?';
+  return `${path}${sep}vault=${activeVault}`;
+}
+
+async function loadVaults() {
+  try {
+    const vaults = await fetch('/api/vaults').then(r => r.json());
+    const sel = document.getElementById('vault-select');
+    sel.innerHTML = vaults.map(v =>
+      `<option value="${v}"${v === activeVault ? ' selected' : ''}>${v === 'default' ? 'Default' : v}</option>`
+    ).join('');
+    sel.style.display = vaults.length > 1 ? '' : 'none';
+  } catch {}
+}
+
+async function switchVault(name) {
+  activeVault = name;
+  localStorage.setItem('activeVault', name);
+  currentSlug = null;
+  await init();
+  showView('graph');
+}
+
+async function createVault() {
+  const input = document.getElementById('new-vault-name');
+  const name = input.value.trim();
+  if (!name) return;
+  const res = await fetch('/api/vaults', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  if (res.ok) {
+    input.value = '';
+    await loadVaults();
+    showToast(`Vault "${name}" created`);
+    loadManageView();
+  }
+}
+
 // ── Init ──
 async function init() {
   const [pagesRes, graphRes] = await Promise.all([
-    fetch('/api/pages').then(r => r.json()),
-    fetch('/api/graph').then(r => r.json()),
+    fetch(api('/api/pages')).then(r => r.json()),
+    fetch(api('/api/graph')).then(r => r.json()),
   ]);
 
   allPages = pagesRes;
@@ -2291,6 +2317,7 @@ async function init() {
 
   renderSidebar(allPages);
   initGraph();
+  await loadVaults();
 }
 
 // ── Sidebar ──
@@ -2334,10 +2361,9 @@ function renderSidebar(pages) {
     html += `<div class="sidebar-section"><h3>${label} <span class="count">${groups[type].length}</span></h3>`;
     for (const p of groups[type]) {
       const isActive = p.slug === currentSlug;
-      const lockSvg = p.vault ? ' <svg class="vault-lock" width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm2.5 6H5.5V5a2.5 2.5 0 1 1 5 0v2z"/></svg>' : '';
       html += `<div class="sidebar-item${isActive ? ' active' : ''}" tabindex="0" data-slug="${p.slug}" onclick="openPage('${p.slug}')">
         <span class="type-dot ${p.type}"></span>
-        <span>${p.title}${lockSvg}</span>
+        <span>${p.title}</span>
       </div>`;
     }
     html += '</div>';
@@ -2376,7 +2402,7 @@ document.getElementById('btn-manage').addEventListener('click', () => showView('
 
 // ── Page view ──
 async function openPage(slug) {
-  const res = await fetch(`/api/page/${slug}`);
+  const res = await fetch(api(`/api/page/${slug}`));
   if (!res.ok) return;
   const page = await res.json();
   currentSlug = slug;
@@ -2385,11 +2411,9 @@ async function openPage(slug) {
   document.getElementById('page-title').textContent = page.title;
 
   let meta = `<span class="page-tag type-tag">${page.type}</span>`;
-  if (page.vault) meta += `<span class="vault-badge"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm2.5 6H5.5V5a2.5 2.5 0 1 1 5 0v2z"/></svg> Vault</span>`;
   if (page.created) meta += `<span class="page-meta-sep">&middot;</span><span>Created ${page.created}</span>`;
   if (page.tags.length) meta += `<span class="page-meta-sep">&middot;</span>`;
   for (const tag of page.tags) meta += `<span class="page-tag">${tag}</span>`;
-  meta += `<button class="vault-move-btn" onclick="toggleVault('${page.slug}')">${page.vault ? 'Make Public' : 'Move to Vault'}</button>`;
   document.getElementById('page-meta').innerHTML = meta;
 
   document.getElementById('page-content').innerHTML = renderMarkdown(page.content);
@@ -2401,25 +2425,6 @@ async function openPage(slug) {
   document.querySelectorAll('.sidebar-item').forEach(el => {
     el.classList.toggle('active', el.dataset.slug === slug);
   });
-}
-
-async function toggleVault(slug) {
-  const res = await fetch('/api/vault/move', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ slug }),
-  });
-  if (!res.ok) return;
-  const [pagesRes, graphRes] = await Promise.all([
-    fetch('/api/pages').then(r => r.json()),
-    fetch('/api/graph').then(r => r.json()),
-  ]);
-  allPages = pagesRes;
-  graphData = graphRes;
-  slugSet = new Set(allPages.map(p => p.slug));
-  renderSidebar(allPages);
-  initGraph();
-  openPage(slug);
 }
 
 function renderMarkdown(md) {
@@ -2814,15 +2819,6 @@ function draw() {
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Vault dashed ring
-    if (n.vault && !isFocused) {
-      ctx.strokeStyle = '#b4a0d4';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 3]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
     // Hover/selected ring
     if (isFocused) {
       ctx.strokeStyle = isSelected ? 'rgba(226, 164, 78, 0.9)' : 'rgba(232, 228, 222, 0.9)';
@@ -2930,8 +2926,7 @@ canvas.addEventListener('mousemove', (e) => {
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
       tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-      const vaultLabel = node.vault ? ' &middot; \u{1F512} vault' : '';
-      tooltip.innerHTML = `<strong>${node.title}</strong><br><span style="color:var(--text-dim)">${node.type} &middot; ${node.links} links${vaultLabel}</span>`;
+      tooltip.innerHTML = `<strong>${node.title}</strong><br><span style="color:var(--text-dim)">${node.type} &middot; ${node.links} links</span>`;
     } else {
       tooltip.style.display = 'none';
     }
@@ -3064,7 +3059,7 @@ async function askChat() {
   `;
 
   try {
-    const res = await fetch('/api/chat', {
+    const res = await fetch(api('/api/chat'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ message: question, model: document.getElementById('chat-model-select')?.value }),
@@ -3137,7 +3132,7 @@ async function loadConfig() {
 async function loadManageView() {
   try {
     const [healthRes, configRes, queueRes, backupRes] = await Promise.all([
-      fetch('/api/wiki/health').then(r => r.json()),
+      fetch(api('/api/wiki/health')).then(r => r.json()),
       fetch('/api/config').then(r => r.json()),
       fetch('/api/queue').then(r => r.json()),
       fetch('/api/backup/status').then(r => r.json()),
@@ -3252,7 +3247,7 @@ function renderManageView(data, queue = [], backup = {}) {
     <div class="health-card">
       <div class="card-label">Wiki Pages</div>
       <div class="card-value">${wiki.totalPages}</div>
-      <div class="card-detail">${Object.entries(wiki.typeCounts).map(([t,c]) => `${c} ${t}`).join(', ')}${wiki.vaultCount ? `, ${wiki.vaultCount} vault` : ''}</div>
+      <div class="card-detail">${Object.entries(wiki.typeCounts).map(([t,c]) => `${c} ${t}`).join(', ')}</div>
     </div>
     <div class="health-card">
       <div class="card-label">Queued Actions</div>
@@ -3265,6 +3260,24 @@ function renderManageView(data, queue = [], backup = {}) {
       <div class="card-detail">${backup.inProgress ? 'In progress...' : backup.lastBackup ? new Date(backup.lastBackup).toLocaleDateString() : 'Never'}</div>
     </div>
   `;
+
+  // Vaults section
+  const vaultsEl = document.getElementById('section-vaults');
+  fetch('/api/vaults').then(r => r.json()).then(vaults => {
+    vaultsEl.innerHTML = `
+      <div class="manage-section-header">
+        <h3>Vaults</h3>
+        <span class="section-count">${vaults.length} vault${vaults.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div style="padding:8px 16px;">
+        ${vaults.map(v => `<span class="page-tag${v === activeVault ? ' type-tag' : ''}" style="margin:2px;cursor:pointer;" onclick="switchVault('${v}')">${v === 'default' ? 'Default' : v}</span>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;padding:8px 16px;">
+        <input id="new-vault-name" class="chat-input" style="flex:1;padding:8px 14px;border-radius:8px;font-size:13px;" placeholder="New vault name..." autocomplete="off">
+        <button class="manage-action-btn primary" onclick="createVault()">Create Vault</button>
+      </div>
+    `;
+  });
 
   // Backup section
   const backupEl = document.getElementById('section-backup');
@@ -3491,7 +3504,7 @@ async function submitPaste() {
   if (!content) { showStatus('paste-status', 'Please paste some content.', 'error'); return; }
 
   try {
-    const res = await fetch('/api/raw', {
+    const res = await fetch(api('/api/raw'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ filename, content }),
@@ -3534,7 +3547,7 @@ async function submitUpload() {
   form.append('file', selectedFile);
 
   try {
-    const res = await fetch('/api/raw', { method: 'POST', body: form });
+    const res = await fetch(api('/api/raw'), { method: 'POST', body: form });
     const data = await res.json();
     if (data.ok) {
       showStatus('upload-status', `Uploaded as raw/${data.filename}`, 'success');
@@ -3554,7 +3567,7 @@ async function submitUrl() {
   if (!url) { showStatus('url-status', 'Please enter a URL.', 'error'); return; }
 
   try {
-    const res = await fetch('/api/raw', {
+    const res = await fetch(api('/api/raw'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ url, filename: filename || undefined }),
