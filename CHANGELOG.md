@@ -4,6 +4,33 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.15] — 2026-04-10
+
+![v0.15](changelogs/v0.15-the-great-untangling.svg)
+
+### The Great Untangling
+
+The one where the monoliths get split into 23 files, innerHTML learns to escape, and the server finally stops trusting every URL it sees.
+
+### Security
+- **XSS prevention**: Added `esc()` HTML escape helper, applied across all `innerHTML` interpolations — chat input, page tags, wikilinks, backlinks, error messages, source filenames
+- **SSRF mitigation**: URL fetch in `/api/raw` now validates scheme (http/https only) and blocks private/loopback/metadata IP ranges
+- **Claude CLI subprocess**: Replaced direct Anthropic API calls with `claude` CLI subprocess — no more API key in server memory
+
+### Fixed
+- **Vault-scoped reload**: `reloadWiki()` now uses `api()` helper — no longer overwrites active vault data with default vault
+- **Persistent vault deletion**: `hiddenVaults` saved to `.wiki-config.json` — deleted vaults stay deleted across server restarts
+- **Write race condition**: Queue and config POST handlers now serialized via promise-chain file lock
+- **Stale architecture docs**: Updated version (v0.14), line counts (server.ts ~740, index.html ~3620), added Chat view mention
+
+### Changed
+- **Server split**: `server.ts` (770 lines) → 9 files: `src/types.ts`, `paths.ts`, `frontmatter.ts`, `vaults.ts`, `search.ts`, `chat.ts`, `backup.ts`, `filelock.ts` + slim router
+- **Frontend split**: `index.html` (3616 lines) → 14 files: `styles.css` + 12 JS modules (`state`, `vault`, `search`, `keyboard`, `sidebar`, `views`, `page`, `graph`, `chat`, `manage`, `status`, `modal`) + slim HTML shell
+- **Dynamic GCS bucket**: Manage view now shows bucket name from server config instead of hardcoded `gs://kuskwiki`
+- **Static file serving**: Server now serves `.css`, `.js`, and `.svg` files from `public/`
+
+---
+
 ## [0.14] — 2026-04-09
 
 ![v0.14](changelogs/v0.14-the-vault-locksmith.svg)
