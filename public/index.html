@@ -1055,7 +1055,7 @@
   @keyframes chat-dot { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
 
   /* Chat input */
-  .chat-input-wrap { padding: 14px 48px 38px; border-top: 1px solid var(--border); background: var(--surface); display: flex; justify-content: center; }
+  .chat-input-wrap { padding: 14px 48px 38px; border-top: 1px solid var(--border); background: var(--surface); display: flex; justify-content: center; flex-shrink: 0; position: sticky; bottom: 0; z-index: 2; }
   .chat-input-row { width: 100%; max-width: 720px; display: flex; gap: 8px; align-items: center; }
   .chat-input { flex: 1; padding: 12px 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 24px; color: var(--text); font-family: var(--font-body); font-size: 14px; outline: none; transition: all 200ms ease; }
   .chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(226, 164, 78, 0.08); }
