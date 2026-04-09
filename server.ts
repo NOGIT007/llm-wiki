@@ -1,6 +1,6 @@
 import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 const WIKI_DIR = join(import.meta.dir, "wiki");
 const RAW_DIR = join(import.meta.dir, "raw");
@@ -28,15 +28,20 @@ interface VaultInfo {
   rawDir: string;
 }
 
+const DEFAULT_VAULT: VaultInfo = { name: "default", wikiDir: WIKI_DIR, rawDir: RAW_DIR };
+
+function sanitizeVaultName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+}
+
 function resolveVault(name?: string | null): VaultInfo {
-  if (!name || name === "default") {
-    return { name: "default", wikiDir: WIKI_DIR, rawDir: RAW_DIR };
-  }
-  return {
-    name,
-    wikiDir: join(VAULTS_DIR, name, "wiki"),
-    rawDir: join(VAULTS_DIR, name, "raw"),
-  };
+  if (!name || name === "default") return DEFAULT_VAULT;
+  const safeName = sanitizeVaultName(name);
+  if (!safeName) return DEFAULT_VAULT;
+  const wikiDir = resolve(VAULTS_DIR, safeName, "wiki");
+  const rawDir = resolve(VAULTS_DIR, safeName, "raw");
+  if (!wikiDir.startsWith(VAULTS_DIR) || !rawDir.startsWith(VAULTS_DIR)) return DEFAULT_VAULT;
+  return { name: safeName, wikiDir, rawDir };
 }
 
 interface WikiPage {
@@ -127,41 +132,32 @@ async function loadVault(v: VaultInfo): Promise<Map<string, WikiPage>> {
 
 // Per-vault page storage
 const vaultPages = new Map<string, Map<string, WikiPage>>();
+const hiddenVaults = new Set<string>(); // Vaults "deleted" but still on disk
 
 function getPages(vaultName?: string | null): Map<string, WikiPage> {
   return vaultPages.get(vaultName || "default") || new Map();
 }
 
-// Load default vault
-vaultPages.set("default", await loadVault(resolveVault("default")));
-
-// Discover additional vaults
-if (existsSync(VAULTS_DIR)) {
-  for (const d of await readdir(VAULTS_DIR)) {
-    const v = resolveVault(d);
-    if (existsSync(v.wikiDir)) {
-      vaultPages.set(d, await loadVault(v));
-    }
-  }
-}
-
 let lastLoad = Date.now();
 
-async function reloadIfNeeded() {
-  if (Date.now() - lastLoad > 5000) {
-    // Reload all vaults
-    vaultPages.set("default", await loadVault(resolveVault("default")));
-    if (existsSync(VAULTS_DIR)) {
-      for (const d of await readdir(VAULTS_DIR)) {
-        const v = resolveVault(d);
-        if (existsSync(v.wikiDir)) {
-          vaultPages.set(d, await loadVault(v));
-        }
-      }
+async function reloadAllVaults() {
+  vaultPages.set("default", await loadVault(DEFAULT_VAULT));
+  if (existsSync(VAULTS_DIR)) {
+    for (const d of await readdir(VAULTS_DIR)) {
+      if (hiddenVaults.has(d)) continue;
+      const v = resolveVault(d);
+      if (existsSync(v.wikiDir)) vaultPages.set(d, await loadVault(v));
     }
-    lastLoad = Date.now();
   }
+  lastLoad = Date.now();
 }
+
+async function reloadIfNeeded() {
+  if (Date.now() - lastLoad > 5000) await reloadAllVaults();
+}
+
+// Initial load
+await reloadAllVaults();
 
 function buildGraphData(pages: Map<string, WikiPage>) {
   const nodes: { id: string; title: string; type: string; links: number }[] = [];
@@ -361,9 +357,10 @@ async function runBackup(): Promise<void> {
     manifest.push(...await uploadDirToGCS(WIKI_DIR, `${prefix}/wiki`, token));
     manifest.push(...await uploadDirToGCS(RAW_DIR, `${prefix}/raw`, token));
 
-    // Backup additional vaults
+    // Backup additional vaults (skip hidden ones)
     if (existsSync(VAULTS_DIR)) {
       for (const d of await readdir(VAULTS_DIR)) {
+        if (hiddenVaults.has(d)) continue;
         const v = resolveVault(d);
         if (existsSync(v.wikiDir)) {
           manifest.push(...await uploadDirToGCS(v.wikiDir, `${prefix}/vaults/${d}/wiki`, token));
@@ -403,7 +400,7 @@ async function listVaults(): Promise<string[]> {
   if (existsSync(VAULTS_DIR)) {
     const dirs = await readdir(VAULTS_DIR);
     for (const d of dirs) {
-      if (existsSync(join(VAULTS_DIR, d, "wiki"))) names.push(d);
+      if (!hiddenVaults.has(d) && existsSync(join(VAULTS_DIR, d, "wiki"))) names.push(d);
     }
   }
   return names;
@@ -435,48 +432,53 @@ const server = Bun.serve({
     if (url.pathname === "/api/vaults" && req.method === "POST") {
       const { name } = await req.json() as { name: string };
       if (!name?.trim()) return Response.json({ error: "Name is required" }, { status: 400, headers: NO_CACHE });
-      const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-      if (safeName === "default") return Response.json({ error: "Cannot create vault named 'default'" }, { status: 400, headers: NO_CACHE });
+      const safeName = sanitizeVaultName(name);
+      if (!safeName || safeName === "default") return Response.json({ error: "Cannot create vault named 'default'" }, { status: 400, headers: NO_CACHE });
       const v = resolveVault(safeName);
+      // If vault was previously hidden (deleted), un-hide and restore it
+      if (hiddenVaults.has(safeName) && existsSync(v.wikiDir)) {
+        hiddenVaults.delete(safeName);
+        vaultPages.set(safeName, await loadVault(v));
+        return Response.json({ ok: true, name: safeName }, { headers: NO_CACHE });
+      }
+      if (existsSync(v.wikiDir)) return Response.json({ error: "Vault already exists" }, { status: 409, headers: NO_CACHE });
       await mkdir(v.wikiDir, { recursive: true });
       await mkdir(v.rawDir, { recursive: true });
       const today = new Date().toISOString().slice(0, 10);
-      await writeFile(join(v.wikiDir, "index.md"), `---\ntitle: Index\ntype: index\ncreated: ${today}\nupdated: ${today}\ntags: []\nsources: []\n---\n\n# ${name}\n\nWiki index for the ${name} vault.\n`);
+      await writeFile(join(v.wikiDir, "index.md"), `---\ntitle: Index\ntype: index\ncreated: ${today}\nupdated: ${today}\ntags: []\nsources: []\n---\n\n# ${safeName}\n\nWiki index for the ${safeName} vault.\n`);
       await writeFile(join(v.wikiDir, "log.md"), `---\ntitle: Log\ntype: log\ncreated: ${today}\nupdated: ${today}\ntags: []\nsources: []\n---\n\n# Activity Log\n`);
       vaultPages.set(safeName, await loadVault(v));
       return Response.json({ ok: true, name: safeName }, { headers: NO_CACHE });
     }
 
     if (url.pathname.startsWith("/api/vaults/") && req.method === "DELETE") {
-      const name = url.pathname.replace("/api/vaults/", "");
-      if (name === "default") return Response.json({ error: "Cannot delete default vault" }, { status: 400, headers: NO_CACHE });
+      const rawName = url.pathname.replace("/api/vaults/", "");
+      const name = sanitizeVaultName(rawName);
+      if (!name || name === "default") return Response.json({ error: "Cannot delete default vault" }, { status: 400, headers: NO_CACHE });
       const v = resolveVault(name);
       if (!existsSync(v.wikiDir)) return Response.json({ error: "Vault not found" }, { status: 404, headers: NO_CACHE });
-      // Remove from memory (files stay on disk for safety)
       vaultPages.delete(name);
+      hiddenVaults.add(name);
       return Response.json({ ok: true, name }, { headers: NO_CACHE });
     }
 
     // Reload wiki data endpoint
     if (url.pathname === "/api/reload") {
-      // Reload all vaults
-      vaultPages.set("default", await loadVault(resolveVault("default")));
-      if (existsSync(VAULTS_DIR)) {
-        for (const d of await readdir(VAULTS_DIR)) {
-          const v2 = resolveVault(d);
-          if (existsSync(v2.wikiDir)) vaultPages.set(d, await loadVault(v2));
-        }
-      }
-      lastLoad = Date.now();
+      await reloadAllVaults();
       return Response.json({ ok: true, pages: getPages(vaultParam).size, reloaded: new Date().toISOString() }, { headers: NO_CACHE });
     }
 
     // Server status
     if (url.pathname === "/api/status") {
       const totalPages = [...vaultPages.values()].reduce((sum, m) => sum + m.size, 0);
+      const perVault: Record<string, number> = {};
+      for (const [name, pages] of vaultPages) {
+        if (!hiddenVaults.has(name)) perVault[name] = pages.size;
+      }
       return Response.json({
         ok: true,
         pages: totalPages,
+        perVault,
         vaults: vaultPages.size,
         uptime: Math.floor(process.uptime()),
         lastLoad: new Date(lastLoad).toISOString(),
@@ -589,11 +591,12 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/queue" && req.method === "POST") {
-      const item = await req.json() as { action: string; target?: string; timestamp?: string };
+      const item = await req.json() as { action: string; target?: string; vault?: string; timestamp?: string };
       item.timestamp = new Date().toISOString();
+      if (!item.vault) item.vault = vaultParam || undefined;
       let queue: any[] = [];
       try { queue = JSON.parse(await readFile(QUEUE_FILE, "utf-8")); } catch {}
-      const exists = queue.some(q => q.action === item.action && q.target === item.target);
+      const exists = queue.some(q => q.action === item.action && q.target === item.target && (q.vault || "default") === (item.vault || "default"));
       if (!exists) {
         queue.push(item);
         await writeFile(QUEUE_FILE, JSON.stringify(queue, null, 2), "utf-8");

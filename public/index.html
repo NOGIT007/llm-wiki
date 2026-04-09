@@ -2283,6 +2283,7 @@ async function switchVault(name) {
   activeVault = name;
   localStorage.setItem('activeVault', name);
   currentSlug = null;
+  chatHistory = JSON.parse(localStorage.getItem(getChatStorageKey()) || '[]');
   await init();
   showView('graph');
 }
@@ -2964,7 +2965,8 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 // ── Chat View ──
-let chatHistory = JSON.parse(localStorage.getItem('wiki-chat-history') || '[]');
+function getChatStorageKey() { return `wiki-chat-history-${activeVault}`; }
+let chatHistory = JSON.parse(localStorage.getItem(getChatStorageKey()) || '[]');
 let chatBusy = false;
 
 const CHAT_SUGGESTIONS = [
@@ -3089,7 +3091,7 @@ async function askChat() {
 
       chatHistory.push({ question, timestamp: new Date().toISOString() });
       if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
-      localStorage.setItem('wiki-chat-history', JSON.stringify(chatHistory));
+      localStorage.setItem(getChatStorageKey(), JSON.stringify(chatHistory));
     }
   } catch (err) {
     results.innerHTML = `
@@ -3467,8 +3469,7 @@ function closeAddSource() {
 }
 
 async function autoQueueAndSwitch(filename) {
-  // Auto-queue ingestion for the new file
-  await fetch('/api/queue', {
+  await fetch(api('/api/queue'), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ action: 'ingest', target: filename }),
