@@ -10,3 +10,5 @@ node_modules/
 test-results/
 wiki/
 raw/
+.wiki-config.json
+.wiki-queue.json
