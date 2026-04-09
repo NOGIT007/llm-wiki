@@ -7,3 +7,4 @@ plans/
 *.log
 vaults/
 node_modules/
+test-results/

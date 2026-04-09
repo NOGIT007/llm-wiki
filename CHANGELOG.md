@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.13] — 2026-04-09
+
+![v0.13](changelogs/v0.13-the-context-window-whisperer.svg)
+
+### The Context Window Whisperer
+
+The one where chat finally reads the wiki, the input bar stops floating away, and empty pages get a welcome mat.
+
+### Fixed
+- **Chat context retrieval**: Split natural language queries into keywords for broader search matching — full questions like "What is Claude?" now find relevant pages instead of returning empty context
+- **Stale vault reference in chat**: Resolve pages fresh via `getPages()` instead of using a captured reference that goes stale after reload
+- **Empty page view**: Page tab now shows welcome message when no page is selected
+- **Chat input bar**: Sticky positioning keeps input fixed at bottom while results scroll above
+
+### Changed
+- `test-results/` added to `.gitignore`
+
+---
+
 ## [0.12] — 2026-04-09
 
 ![v0.12](changelogs/v0.12-the-multiverse-of-markdown.svg)
