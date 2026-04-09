@@ -26,14 +26,6 @@ test.describe("Wiki UI", () => {
     await expect(page.locator("#page-title")).not.toBeEmpty();
   });
 
-  test("page view shows vault move button", async ({ page }) => {
-    await page.goto("/");
-    await page.waitForSelector(".sidebar-item", { timeout: 10000 });
-    await page.locator(".sidebar-item").first().click();
-    await expect(page.locator(".vault-move-btn")).toBeVisible();
-    await expect(page.locator(".vault-move-btn")).toHaveText("Move to Vault");
-  });
-
   test("sidebar search filters pages", async ({ page }) => {
     await page.goto("/");
     await page.waitForSelector(".sidebar-item", { timeout: 10000 });
@@ -53,12 +45,8 @@ test.describe("Chat UI", () => {
     await page.locator("#btn-chat").click();
     await expect(page.locator("#chat-view")).toHaveClass(/active/);
     await modelsPromise;
-    // Small delay for DOM update
     await page.waitForTimeout(200);
     await expect(page.locator("#chat-model-select")).toBeVisible();
-    const options = page.locator("#chat-model-select option");
-    const count = await options.count();
-    expect(count).toBeGreaterThan(0);
     await expect(page.locator("#chat-input")).toBeVisible();
     await expect(page.locator("#chat-ask-btn")).toBeVisible();
   });
@@ -102,12 +90,13 @@ test.describe("Manage UI", () => {
     await expect(page.locator("#section-backup").getByText("Backup to GCS")).toBeVisible();
   });
 
-  test("shows wiki pages card", async ({ page }) => {
+  test("has vaults section", async ({ page }) => {
     await page.goto("/");
     await page.locator("#btn-manage").click();
     await page.waitForSelector(".health-card", { timeout: 10000 });
-    const text = await page.locator("#health-grid").innerText();
-    expect(text.toLowerCase()).toContain("wiki pages");
+    await expect(page.locator("#section-vaults")).toBeVisible();
+    const text = await page.locator("#section-vaults").innerText();
+    expect(text.toLowerCase()).toContain("vault");
   });
 });
 

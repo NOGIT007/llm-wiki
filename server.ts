@@ -1,10 +1,10 @@
-import { readdir, readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const WIKI_DIR = join(import.meta.dir, "wiki");
 const RAW_DIR = join(import.meta.dir, "raw");
-const VAULT_DIR = join(import.meta.dir, "vault");
+const VAULTS_DIR = join(import.meta.dir, "vaults");
 const CONFIG_FILE = join(import.meta.dir, ".wiki-config.json");
 const QUEUE_FILE = join(import.meta.dir, ".wiki-queue.json");
 const NO_CACHE = {
@@ -20,6 +20,25 @@ const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
 
 const WIKI_CHAT_SYSTEM_PROMPT = `You are a helpful assistant for a personal knowledge base wiki. Answer questions based on the provided wiki context. Cite pages using [[wikilinks]] format. Be concise and accurate. If the context doesn't contain enough information, say so honestly.`;
 
+// ── Multi-vault support ──
+
+interface VaultInfo {
+  name: string;
+  wikiDir: string;
+  rawDir: string;
+}
+
+function resolveVault(name?: string | null): VaultInfo {
+  if (!name || name === "default") {
+    return { name: "default", wikiDir: WIKI_DIR, rawDir: RAW_DIR };
+  }
+  return {
+    name,
+    wikiDir: join(VAULTS_DIR, name, "wiki"),
+    rawDir: join(VAULTS_DIR, name, "raw"),
+  };
+}
+
 interface WikiPage {
   slug: string;
   title: string;
@@ -30,7 +49,6 @@ interface WikiPage {
   sources: string[];
   content: string;
   links: string[];
-  vault: boolean;
 }
 
 function parseFrontmatter(raw: string): {
@@ -70,14 +88,13 @@ function extractWikilinks(text: string): string[] {
   const re = /\[\[([^\]]+)\]\]/g;
   let m;
   while ((m = re.exec(text)) !== null) {
-    // Support [[slug|alias]] — use the slug part (before |)
     const target = m[1].split("|")[0].trim();
     links.add(target.toLowerCase().replace(/\s+/g, "-"));
   }
   return [...links];
 }
 
-async function loadDir(dir: string, isVault: boolean, pages: Map<string, WikiPage>) {
+async function loadDir(dir: string, pages: Map<string, WikiPage>) {
   const files = await readdir(dir).catch(() => [] as string[]);
   for (const file of files) {
     if (!file.endsWith(".md") || file === "index.md" || file === "log.md") continue;
@@ -98,34 +115,55 @@ async function loadDir(dir: string, isVault: boolean, pages: Map<string, WikiPag
       sources: Array.isArray(meta.sources) ? meta.sources : [],
       content,
       links: [...new Set(links)],
-      vault: isVault,
     });
   }
 }
 
-async function loadWiki(): Promise<Map<string, WikiPage>> {
+async function loadVault(v: VaultInfo): Promise<Map<string, WikiPage>> {
   const pages = new Map<string, WikiPage>();
-  await loadDir(WIKI_DIR, false, pages);
-  await loadDir(VAULT_DIR, true, pages);
+  await loadDir(v.wikiDir, pages);
   return pages;
 }
 
-// Ensure vault directory exists
-if (!existsSync(VAULT_DIR)) await mkdir(VAULT_DIR, { recursive: true });
+// Per-vault page storage
+const vaultPages = new Map<string, Map<string, WikiPage>>();
 
-// Mutable — reloaded on demand
-let pages = await loadWiki();
+function getPages(vaultName?: string | null): Map<string, WikiPage> {
+  return vaultPages.get(vaultName || "default") || new Map();
+}
+
+// Load default vault
+vaultPages.set("default", await loadVault(resolveVault("default")));
+
+// Discover additional vaults
+if (existsSync(VAULTS_DIR)) {
+  for (const d of await readdir(VAULTS_DIR)) {
+    const v = resolveVault(d);
+    if (existsSync(v.wikiDir)) {
+      vaultPages.set(d, await loadVault(v));
+    }
+  }
+}
+
 let lastLoad = Date.now();
 
 async function reloadIfNeeded() {
-  // Reload wiki data every 5 seconds max
   if (Date.now() - lastLoad > 5000) {
-    pages = await loadWiki();
+    // Reload all vaults
+    vaultPages.set("default", await loadVault(resolveVault("default")));
+    if (existsSync(VAULTS_DIR)) {
+      for (const d of await readdir(VAULTS_DIR)) {
+        const v = resolveVault(d);
+        if (existsSync(v.wikiDir)) {
+          vaultPages.set(d, await loadVault(v));
+        }
+      }
+    }
     lastLoad = Date.now();
   }
 }
 
-function buildGraphData() {
+function buildGraphData(pages: Map<string, WikiPage>) {
   const nodes: { id: string; title: string; type: string; links: number }[] = [];
   const edges: { source: string; target: string }[] = [];
   const slugs = new Set(pages.keys());
@@ -136,7 +174,6 @@ function buildGraphData() {
       title: page.title,
       type: page.type,
       links: page.links.length,
-      vault: page.vault,
     });
     for (const link of page.links) {
       if (slugs.has(link) && link !== slug) {
@@ -148,7 +185,7 @@ function buildGraphData() {
   return { nodes, edges };
 }
 
-function searchPages(query: string) {
+function searchPages(query: string, pages: Map<string, WikiPage>) {
   const q = query.toLowerCase();
   const results: { slug: string; title: string; type: string; score: number }[] = [];
 
@@ -158,7 +195,7 @@ function searchPages(query: string) {
     if (slug.includes(q)) score += 5;
     if (page.tags.some((t) => t.includes(q))) score += 3;
     if (page.content.toLowerCase().includes(q)) score += 1;
-    if (score > 0) results.push({ slug, title: page.title, type: page.type, score, vault: page.vault });
+    if (score > 0) results.push({ slug, title: page.title, type: page.type, score });
   }
 
   return results.sort((a, b) => b.score - a.score);
@@ -166,8 +203,8 @@ function searchPages(query: string) {
 
 // ── LLM Chat helpers ──
 
-function gatherChatContext(query: string): { context: string; sources: string[] } {
-  const results = searchPages(query).slice(0, 5);
+function gatherChatContext(query: string, pages: Map<string, WikiPage>): { context: string; sources: string[] } {
+  const results = searchPages(query, pages).slice(0, 5);
   const sources: string[] = [];
   const parts: string[] = [];
   let charBudget = 6000;
@@ -309,9 +346,20 @@ async function runBackup(): Promise<void> {
     const prefix = `backups/${ts}`;
     const manifest: string[] = [];
 
+    // Backup default vault
     manifest.push(...await uploadDirToGCS(WIKI_DIR, `${prefix}/wiki`, token));
-    manifest.push(...await uploadDirToGCS(VAULT_DIR, `${prefix}/vault`, token));
     manifest.push(...await uploadDirToGCS(RAW_DIR, `${prefix}/raw`, token));
+
+    // Backup additional vaults
+    if (existsSync(VAULTS_DIR)) {
+      for (const d of await readdir(VAULTS_DIR)) {
+        const v = resolveVault(d);
+        if (existsSync(v.wikiDir)) {
+          manifest.push(...await uploadDirToGCS(v.wikiDir, `${prefix}/vaults/${d}/wiki`, token));
+          manifest.push(...await uploadDirToGCS(v.rawDir, `${prefix}/vaults/${d}/raw`, token));
+        }
+      }
+    }
 
     // Upload config files
     for (const [name, path] of [[".wiki-config.json", CONFIG_FILE], [".wiki-queue.json", QUEUE_FILE]] as const) {
@@ -322,7 +370,6 @@ async function runBackup(): Promise<void> {
       } catch {}
     }
 
-    // Write manifest
     await uploadToGCS(`${prefix}/manifest.json`, JSON.stringify({ timestamp: ts, files: manifest }, null, 2), token);
 
     backupStatus = {
@@ -339,10 +386,25 @@ async function runBackup(): Promise<void> {
   }
 }
 
+// ── Helper to list all vault names ──
+async function listVaults(): Promise<string[]> {
+  const names = ["default"];
+  if (existsSync(VAULTS_DIR)) {
+    const dirs = await readdir(VAULTS_DIR);
+    for (const d of dirs) {
+      if (existsSync(join(VAULTS_DIR, d, "wiki"))) names.push(d);
+    }
+  }
+  return names;
+}
+
 const server = Bun.serve({
   port: 5000,
   async fetch(req) {
     const url = new URL(req.url);
+    const vaultParam = url.searchParams.get("vault");
+    const vault = resolveVault(vaultParam);
+    const pages = getPages(vaultParam);
 
     // Serve HTML — always fresh from disk
     if (url.pathname === "/") {
@@ -355,18 +417,57 @@ const server = Bun.serve({
       return new Response(html, { headers: { "content-type": "text/html", ...NO_CACHE } });
     }
 
-    // Reload wiki data endpoint — callable from browser
+    // ── Vault management endpoints ──
+    if (url.pathname === "/api/vaults" && req.method === "GET") {
+      return Response.json(await listVaults(), { headers: NO_CACHE });
+    }
+
+    if (url.pathname === "/api/vaults" && req.method === "POST") {
+      const { name } = await req.json() as { name: string };
+      if (!name?.trim()) return Response.json({ error: "Name is required" }, { status: 400, headers: NO_CACHE });
+      const safeName = name.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+      if (safeName === "default") return Response.json({ error: "Cannot create vault named 'default'" }, { status: 400, headers: NO_CACHE });
+      const v = resolveVault(safeName);
+      await mkdir(v.wikiDir, { recursive: true });
+      await mkdir(v.rawDir, { recursive: true });
+      const today = new Date().toISOString().slice(0, 10);
+      await writeFile(join(v.wikiDir, "index.md"), `---\ntitle: Index\ntype: index\ncreated: ${today}\nupdated: ${today}\ntags: []\nsources: []\n---\n\n# ${name}\n\nWiki index for the ${name} vault.\n`);
+      await writeFile(join(v.wikiDir, "log.md"), `---\ntitle: Log\ntype: log\ncreated: ${today}\nupdated: ${today}\ntags: []\nsources: []\n---\n\n# Activity Log\n`);
+      vaultPages.set(safeName, await loadVault(v));
+      return Response.json({ ok: true, name: safeName }, { headers: NO_CACHE });
+    }
+
+    if (url.pathname.startsWith("/api/vaults/") && req.method === "DELETE") {
+      const name = url.pathname.replace("/api/vaults/", "");
+      if (name === "default") return Response.json({ error: "Cannot delete default vault" }, { status: 400, headers: NO_CACHE });
+      const v = resolveVault(name);
+      if (!existsSync(v.wikiDir)) return Response.json({ error: "Vault not found" }, { status: 404, headers: NO_CACHE });
+      // Remove from memory (files stay on disk for safety)
+      vaultPages.delete(name);
+      return Response.json({ ok: true, name }, { headers: NO_CACHE });
+    }
+
+    // Reload wiki data endpoint
     if (url.pathname === "/api/reload") {
-      pages = await loadWiki();
+      // Reload all vaults
+      vaultPages.set("default", await loadVault(resolveVault("default")));
+      if (existsSync(VAULTS_DIR)) {
+        for (const d of await readdir(VAULTS_DIR)) {
+          const v2 = resolveVault(d);
+          if (existsSync(v2.wikiDir)) vaultPages.set(d, await loadVault(v2));
+        }
+      }
       lastLoad = Date.now();
       return Response.json({ ok: true, pages: pages.size, reloaded: new Date().toISOString() }, { headers: NO_CACHE });
     }
 
     // Server status
     if (url.pathname === "/api/status") {
+      const totalPages = [...vaultPages.values()].reduce((sum, m) => sum + m.size, 0);
       return Response.json({
         ok: true,
-        pages: pages.size,
+        pages: totalPages,
+        vaults: vaultPages.size,
         uptime: Math.floor(process.uptime()),
         lastLoad: new Date(lastLoad).toISOString(),
       }, { headers: NO_CACHE });
@@ -376,12 +477,12 @@ const server = Bun.serve({
     await reloadIfNeeded();
 
     if (url.pathname === "/api/graph") {
-      return Response.json(buildGraphData(), { headers: NO_CACHE });
+      return Response.json(buildGraphData(pages), { headers: NO_CACHE });
     }
 
     if (url.pathname === "/api/pages") {
-      const list = [...pages.values()].map(({ slug, title, type, tags, vault }) => ({
-        slug, title, type, tags, vault,
+      const list = [...pages.values()].map(({ slug, title, type, tags }) => ({
+        slug, title, type, tags,
       }));
       return Response.json(list, { headers: NO_CACHE });
     }
@@ -395,14 +496,14 @@ const server = Bun.serve({
 
     if (url.pathname === "/api/search") {
       const q = url.searchParams.get("q") || "";
-      return Response.json(searchPages(q), { headers: NO_CACHE });
+      return Response.json(searchPages(q, pages), { headers: NO_CACHE });
     }
 
     // ── Wiki management endpoint ──
     if (url.pathname === "/api/wiki/health") {
-      const rawFiles = (await readdir(RAW_DIR)).filter(f => f.endsWith(".md")).sort();
+      const rawDir = vault.rawDir;
+      const rawFiles = (await readdir(rawDir).catch(() => [] as string[])).filter(f => f.endsWith(".md")).sort();
 
-      // Build set of ingested raw filenames by scanning src-* pages' sources fields
       const ingestedRaw = new Set<string>();
       const srcPages: { slug: string; title: string; rawFile: string }[] = [];
       for (const [slug, page] of pages) {
@@ -420,51 +521,32 @@ const server = Bun.serve({
         return { rawFile: f, wikiSlug: src?.slug || null, wikiTitle: src?.title || null };
       });
 
-      // Broken wikilinks: links pointing to non-existent pages
       const slugSet = new Set(pages.keys());
       const brokenLinks: { from: string; to: string }[] = [];
       for (const [slug, page] of pages) {
         for (const link of page.links) {
-          if (!slugSet.has(link)) {
-            brokenLinks.push({ from: slug, to: link });
-          }
+          if (!slugSet.has(link)) brokenLinks.push({ from: slug, to: link });
         }
       }
 
-      // Orphan pages: pages with no inbound links
       const inbound = new Set<string>();
-      for (const [slug, page] of pages) {
-        for (const link of page.links) {
-          inbound.add(link);
-        }
+      for (const [, page] of pages) {
+        for (const link of page.links) inbound.add(link);
       }
       const orphans = [...pages.keys()].filter(s => !inbound.has(s));
 
-      // Type counts
       const typeCounts: Record<string, number> = {};
       for (const page of pages.values()) {
         typeCounts[page.type] = (typeCounts[page.type] || 0) + 1;
       }
 
-      const vaultCount = [...pages.values()].filter(p => p.vault).length;
-
       return Response.json({
-        raw: {
-          total: rawFiles.length,
-          ingested: ingestedList,
-          pending: pendingRaw,
-        },
-        wiki: {
-          totalPages: pages.size,
-          vaultCount,
-          typeCounts,
-          brokenLinks,
-          orphans,
-        },
+        raw: { total: rawFiles.length, ingested: ingestedList, pending: pendingRaw },
+        wiki: { totalPages: pages.size, typeCounts, brokenLinks, orphans },
       }, { headers: NO_CACHE });
     }
 
-    // ── Config endpoint (auto-ingest toggle) ──
+    // ── Config endpoint ──
     if (url.pathname === "/api/config" && req.method === "GET") {
       try {
         const raw = await readFile(CONFIG_FILE, "utf-8");
@@ -483,7 +565,7 @@ const server = Bun.serve({
       return Response.json({ ok: true, config }, { headers: NO_CACHE });
     }
 
-    // ── Queue endpoint (ingest/fix requests) ──
+    // ── Queue endpoint ──
     if (url.pathname === "/api/queue" && req.method === "GET") {
       try {
         const raw = await readFile(QUEUE_FILE, "utf-8");
@@ -498,7 +580,6 @@ const server = Bun.serve({
       item.timestamp = new Date().toISOString();
       let queue: any[] = [];
       try { queue = JSON.parse(await readFile(QUEUE_FILE, "utf-8")); } catch {}
-      // Deduplicate: don't add if same action+target already queued
       const exists = queue.some(q => q.action === item.action && q.target === item.target);
       if (!exists) {
         queue.push(item);
@@ -512,38 +593,31 @@ const server = Bun.serve({
       return Response.json({ ok: true }, { headers: NO_CACHE });
     }
 
-    // ── Raw source endpoints ──
-
-    // List raw files
+    // ── Raw source endpoints (vault-scoped) ──
     if (url.pathname === "/api/raw" && req.method === "GET") {
-      const files = await readdir(RAW_DIR);
+      const rawDir = vault.rawDir;
+      const files = await readdir(rawDir).catch(() => [] as string[]);
       const mdFiles = files.filter(f => f.endsWith(".md")).sort();
       return Response.json(mdFiles, { headers: NO_CACHE });
     }
 
-    // Save raw source (paste, upload, or URL fetch)
     if (url.pathname === "/api/raw" && req.method === "POST") {
+      const rawDir = vault.rawDir;
+      if (!existsSync(rawDir)) await mkdir(rawDir, { recursive: true });
       const contentType = req.headers.get("content-type") || "";
 
-      // Handle multipart file upload
       if (contentType.includes("multipart/form-data")) {
         const formData = await req.formData();
         const file = formData.get("file") as File | null;
-        if (!file) {
-          return Response.json({ error: "No file provided" }, { status: 400 });
-        }
-
+        if (!file) return Response.json({ error: "No file provided" }, { status: 400 });
         const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
         const content = await file.text();
-        const dest = join(RAW_DIR, filename);
-        await writeFile(dest, content, "utf-8");
+        await writeFile(join(rawDir, filename), content, "utf-8");
         return Response.json({ ok: true, filename }, { headers: NO_CACHE });
       }
 
-      // Handle JSON body (paste or URL)
       const body = await req.json() as { filename?: string; content?: string; url?: string };
 
-      // URL fetch mode
       if (body.url) {
         try {
           const res = await fetch(body.url);
@@ -557,14 +631,13 @@ const server = Bun.serve({
             .toLowerCase()
             .slice(0, 80);
           const filename = `${slug}.md`;
-          await writeFile(join(RAW_DIR, filename), text, "utf-8");
+          await writeFile(join(rawDir, filename), text, "utf-8");
           return Response.json({ ok: true, filename }, { headers: NO_CACHE });
         } catch (err: any) {
           return Response.json({ error: err.message }, { status: 400 });
         }
       }
 
-      // Paste mode
       if (body.content && body.filename) {
         const filename = body.filename
           .replace(/[^a-zA-Z0-9._-]/g, "-")
@@ -572,7 +645,7 @@ const server = Bun.serve({
           .replace(/-+/g, "-")
           .replace(/^-|-$/g, "");
         const safeName = filename.endsWith(".md") ? filename : `${filename}.md`;
-        await writeFile(join(RAW_DIR, safeName), body.content, "utf-8");
+        await writeFile(join(rawDir, safeName), body.content, "utf-8");
         return Response.json({ ok: true, filename: safeName }, { headers: NO_CACHE });
       }
 
@@ -606,7 +679,7 @@ const server = Bun.serve({
         }
 
         await reloadIfNeeded();
-        const { context, sources } = gatherChatContext(message);
+        const { context, sources } = gatherChatContext(message, pages);
         const userPrompt = context
           ? `Wiki context:\n\n${context}\n\n---\nQuestion: ${message}`
           : `No relevant wiki pages found for context.\n\nQuestion: ${message}`;
@@ -634,19 +707,6 @@ const server = Bun.serve({
         backupStatus.inProgress = false;
       });
       return Response.json({ ok: true, message: "Backup started" }, { headers: NO_CACHE });
-    }
-
-    // ── Vault move endpoint ──
-    if (url.pathname === "/api/vault/move" && req.method === "POST") {
-      const { slug } = await req.json() as { slug: string };
-      const page = pages.get(slug);
-      if (!page) return Response.json({ error: "Not found" }, { status: 404, headers: NO_CACHE });
-      const srcDir = page.vault ? VAULT_DIR : WIKI_DIR;
-      const dstDir = page.vault ? WIKI_DIR : VAULT_DIR;
-      await rename(join(srcDir, `${slug}.md`), join(dstDir, `${slug}.md`));
-      pages = await loadWiki();
-      lastLoad = Date.now();
-      return Response.json({ ok: true, vault: !page.vault }, { headers: NO_CACHE });
     }
 
     return new Response("Not found", { status: 404 });
