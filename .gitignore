@@ -6,3 +6,4 @@ plans/
 /tmp/
 *.log
 vault/
+node_modules/

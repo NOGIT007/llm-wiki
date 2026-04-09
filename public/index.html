@@ -3269,7 +3269,7 @@ function renderManageView(data, queue = [], backup = {}) {
     <div class="manage-section-header">
       <h3>Cloud Backup</h3>
       <div class="manage-actions">
-        ${backup.lastBackup ? `<span class="section-count">${backup.filesUploaded} files &middot; ${backup.lastLabel}</span>` : '<span class="section-count">gs://${backup.lastLabel || 'kuskwiki'}</span>'}
+        ${backup.lastBackup ? `<span class="section-count">${backup.filesUploaded} files &middot; ${backup.lastLabel}</span>` : `<span class="section-count">gs://kuskwiki</span>`}
         <button class="manage-action-btn primary" onclick="triggerBackup()" ${backup.inProgress ? 'disabled' : ''}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="M12 13v6"/><path d="m9 16 3-3 3 3"/></svg>
           ${backup.inProgress ? 'Backing up...' : 'Backup to GCS'}
