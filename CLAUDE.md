@@ -5,11 +5,18 @@ A personal knowledge base maintained by an LLM. The human curates sources, asks 
 ## Directory Structure
 
 ```
-raw/            # Raw sources — immutable, never modify. Read only.
-wiki/           # LLM-owned markdown pages. Create, update, delete freely.
-wiki/index.md   # Content catalog — all pages listed with summaries
-wiki/log.md     # Chronological activity log
-vaults/         # Additional vaults — gitignored. Each vault has its own wiki/ and raw/.
+server.ts         # HTTP router — imports modules from src/
+src/              # Server modules (types, vaults, search, chat, backup, frontmatter, filelock, paths)
+public/
+  index.html      # Slim HTML shell
+  styles.css      # All CSS
+  js/             # JS modules (state, vault, search, keyboard, sidebar, views, page, graph, chat, manage, status, modal)
+  architecture.html
+raw/              # Raw sources — immutable, never modify. Read only.
+wiki/             # LLM-owned markdown pages. Create, update, delete freely.
+wiki/index.md     # Content catalog — all pages listed with summaries
+wiki/log.md       # Chronological activity log
+vaults/           # Additional vaults — gitignored. Each vault has its own wiki/ and raw/.
 ```
 
 ## Page Format
@@ -37,13 +44,14 @@ tags:
 
 ## Server & UI
 
+- Setup: `bun install`
 - Server: `bun run server.ts` (port 5000), control via `./wiki.sh start|stop|restart|status`
 - UI: `http://localhost:5000` — Graph, Page, Chat, and Manage views
 - Add Source: UI modal (paste, upload, URL) saves to `raw/` and auto-queues ingestion
 
 ### Chat
 
-The Chat view queries the wiki via LLM. Model selection (Mistral default, Claude, Gemini) is in the chat input bar. Preference saved to `.wiki-config.json` as `chatModel`.
+The Chat view queries the wiki via LLM. Model selection (Mistral default, Claude, Gemini) is in the chat input bar. Preference saved to `.wiki-config.json` as `chatModel`. Claude uses the `claude` CLI as a subprocess — no API key needed. Mistral and Gemini use API keys from `.env`.
 
 ### Vaults
 
@@ -51,7 +59,7 @@ Obsidian-style multi-vault support. The default vault is `wiki/` + `raw/`. Addit
 
 ### Backup
 
-`POST /api/backup` uploads wiki/, vault/, raw/, and config files to GCS (`gs://kuskwiki/backups/{timestamp}/`). Requires `gcloud auth application-default login`. Trigger from Manage view.
+`POST /api/backup` uploads wiki/, vault/, raw/, and config files to GCS (`backups/{timestamp}/`). Bucket configured via `GOOGLE_CLOUD_STORAGE_BUCKET` env var. Requires `gcloud auth application-default login`. Trigger from Manage view.
 
 ### Queue & Config Files
 
