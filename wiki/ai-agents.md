@@ -6,8 +6,8 @@ updated: 2026-04-07
 sources:
   - "[[src-ai-agents-the-next-os]]"
   - "[[src-training-ai-agents]]"
-  - "[[src-swarm-agent]]"
-  - "[[src-beyond-the-hype-ai-agent-misalignment]]"
+  - "[[src-swarm-agent-with-claude-code]]"
+  - "[[src-ai-agent-misalignment-management]]"
 tags:
   - agents
   - autonomy

@@ -26,7 +26,7 @@ BCG and Harvard studied 758 consultants using AI. Inside AI's capability boundar
 
 ## Six Missing Skills
 
-The article identifies six capabilities absent from most [[AI Training Programs]]: (1) **Context Assembly** — information architecture for non-human readers, (2) **Quality Judgment** — distinguishing good output from confident [[Hallucinations]], (3) **Task Decomposition** — identifying which 30% of work AI handles well, (4) **Iterative Refinement** — building on partial results across rounds, (5) **Workflow Integration** — embedding AI without creating bottlenecks, and (6) **Frontier Recognition** — mapping where AI performs reliably in your specific domain.
+The article identifies six capabilities absent from most [[AI Adoption]]: (1) **Context Assembly** — information architecture for non-human readers, (2) **Quality Judgment** — distinguishing good output from confident [[Hallucinations]], (3) **Task Decomposition** — identifying which 30% of work AI handles well, (4) **Iterative Refinement** — building on partial results across rounds, (5) **Workflow Integration** — embedding AI without creating bottlenecks, and (6) **Frontier Recognition** — mapping where AI performs reliably in your specific domain.
 
 ## The Fix
 

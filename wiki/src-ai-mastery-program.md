@@ -14,7 +14,7 @@ tags:
 
 # AI Mastery Program
 
-A five-level progression program by [[Morten Andre Nilsson]] that bridges the gap between understanding the [[4D Framework]] in theory and applying it in real work. It is designed as the next step after the AI Fluency Workshop and directly addresses [[The 201 Gap]] — the missing middle layer in corporate [[AI Training Programs]].
+A five-level progression program by [[Morten Andre Nilsson]] that bridges the gap between understanding the [[4D Framework]] in theory and applying it in real work. It is designed as the next step after the AI Fluency Workshop and directly addresses [[The 201 Gap]] — the missing middle layer in corporate [[AI Adoption]].
 
 ## Five Levels of Progression
 

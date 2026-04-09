@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Wiki — Architecture</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23111110'/><rect x='2' y='2' width='28' height='28' rx='6' fill='none' stroke='%23e2a44e' stroke-width='2.5'/><text x='16' y='22' text-anchor='middle' font-family='Georgia,serif' font-weight='600' font-size='16' fill='%23e2a44e'>W</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=DM+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #111110;
+    --surface: #1a1a19;
+    --surface-raised: #222221;
+    --border: #2a2a28;
+    --text: #e8e4de;
+    --text-secondary: #a09b93;
+    --text-dim: #6b6761;
+    --accent: #e2a44e;
+    --accent-dim: rgba(226, 164, 78, 0.15);
+    --green: #7ec97e;
+    --purple: #b4a0d4;
+    --orange: #d4956a;
+    --pink: #d48fa5;
+    --red: #c9514b;
+    --blue: #6ba3d4;
+    --font-display: 'Newsreader', Georgia, serif;
+    --font-body: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --radius: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 32px;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .logo-icon {
+    width: 24px; height: 24px; border-radius: 6px;
+    background: linear-gradient(135deg, var(--accent) 0%, #c47a2a 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: var(--bg); flex-shrink: 0;
+  }
+
+  header h1 {
+    font-family: var(--font-display);
+    font-size: 17px; font-weight: 500; letter-spacing: -0.01em;
+  }
+
+  header .subtitle {
+    color: var(--text-dim); font-size: 13px;
+  }
+
+  .back-link {
+    margin-left: auto;
+    color: var(--accent); text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    padding: 5px 14px; border: 1px solid var(--border);
+    border-radius: var(--radius);
+    transition: all 150ms ease;
+  }
+  .back-link:hover { background: var(--accent-dim); border-color: var(--accent); }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 40px 32px 80px;
+  }
+
+  .hero {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+  .hero h2 {
+    font-family: var(--font-display);
+    font-size: 32px; font-weight: 500;
+    margin-bottom: 12px;
+  }
+  .hero p {
+    color: var(--text-secondary); font-size: 15px;
+    max-width: 600px; margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  /* ─── Stats ribbon ─── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 56px;
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    text-align: center;
+  }
+  .stat-value {
+    font-family: var(--font-display);
+    font-size: 36px; font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 4px;
+  }
+  .stat-label {
+    font-size: 12px; color: var(--text-dim);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+
+  /* ─── Architecture diagram ─── */
+  .arch-section {
+    margin-bottom: 56px;
+  }
+  .arch-section h3 {
+    font-family: var(--font-display);
+    font-size: 22px; font-weight: 500;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .diagram {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .layer {
+    position: relative;
+  }
+  .layer-label {
+    font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--text-dim);
+    margin-bottom: 10px; font-weight: 600;
+  }
+  .layer-content {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    flex: 1;
+    min-width: 200px;
+    position: relative;
+    transition: all 200ms ease;
+  }
+  .box:hover {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-dim);
+  }
+  .box-title {
+    font-weight: 600; font-size: 14px;
+    margin-bottom: 6px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .box-title .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .box-desc {
+    font-size: 12px; color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .box-tech {
+    margin-top: 10px;
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .tag {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--accent-dim);
+    color: var(--accent);
+  }
+  .tag.green { background: rgba(126,201,126,0.12); color: var(--green); }
+  .tag.purple { background: rgba(180,160,212,0.12); color: var(--purple); }
+  .tag.pink { background: rgba(212,143,165,0.12); color: var(--pink); }
+  .tag.blue { background: rgba(107,163,212,0.12); color: var(--blue); }
+  .tag.orange { background: rgba(212,149,106,0.12); color: var(--orange); }
+
+  /* Arrows */
+  .arrow-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 0;
+  }
+  .arrow {
+    display: flex; flex-direction: column;
+    align-items: center; gap: 2px;
+    color: var(--text-dim);
+  }
+  .arrow svg { width: 20px; height: 20px; }
+  .arrow-label {
+    font-size: 10px; color: var(--text-dim);
+    font-family: var(--font-mono);
+  }
+
+  /* ─── File tree ─── */
+  .file-tree {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 2;
+    overflow-x: auto;
+  }
+  .file-tree .dir { color: var(--accent); font-weight: 500; }
+  .file-tree .file { color: var(--text-secondary); }
+  .file-tree .comment { color: var(--text-dim); font-style: italic; }
+  .file-tree .special { color: var(--green); }
+
+  /* ─── Flow diagram ─── */
+  .flow-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+  }
+  .flow-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+  }
+  .flow-card h4 {
+    font-size: 14px; font-weight: 600;
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .flow-card h4 .num {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent-dim); color: var(--accent);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600;
+  }
+  .flow-steps {
+    list-style: none;
+  }
+  .flow-steps li {
+    font-size: 12px; color: var(--text-secondary);
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.5;
+  }
+  .flow-steps li:last-child { border-bottom: none; }
+  .flow-steps li::before {
+    content: "→ ";
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ─── API table ─── */
+  .api-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .api-table th {
+    text-align: left;
+    font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-dim);
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .api-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .api-table tr:hover td {
+    background: var(--surface-raised);
+  }
+  .method {
+    font-family: var(--font-mono);
+    font-size: 11px; font-weight: 600;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .method.get { background: rgba(126,201,126,0.12); color: var(--green); }
+  .method.post { background: rgba(107,163,212,0.12); color: var(--blue); }
+  .method.delete { background: rgba(201,81,75,0.12); color: var(--red); }
+  .endpoint {
+    font-family: var(--font-mono);
+    font-size: 12px; color: var(--accent);
+  }
+  .api-desc { color: var(--text-secondary); }
+
+  /* ─── Connection lines (SVG overlay) ─── */
+  .connections {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  @media (max-width: 768px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .flow-grid { grid-template-columns: 1fr; }
+    .layer-content { flex-direction: column; }
+    .container { padding: 24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">W</div>
+  <h1>LLM Wiki</h1>
+  <span class="subtitle">v0.10 — Architecture</span>
+  <a href="/" class="back-link">Back to Wiki</a>
+</header>
+
+<div class="container">
+
+  <div class="hero">
+    <h2>How This Thing Works</h2>
+    <p>A personal knowledge base where an LLM writes and maintains all content. The human curates sources and asks questions. Here's what's under the hood.</p>
+  </div>
+
+  <!-- Live stats -->
+  <div class="stats" id="stats">
+    <div class="stat-card">
+      <div class="stat-value" id="stat-pages">--</div>
+      <div class="stat-label">Wiki Pages</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-sources">--</div>
+      <div class="stat-label">Raw Sources</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-links">--</div>
+      <div class="stat-label">Cross-Links</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-value" id="stat-uptime">--</div>
+      <div class="stat-label">Server Uptime</div>
+    </div>
+  </div>
+
+  <!-- Stack diagram -->
+  <div class="arch-section">
+    <h3>System Architecture</h3>
+    <div class="diagram">
+
+      <!-- Browser layer -->
+      <div class="layer">
+        <div class="layer-label">Browser</div>
+        <div class="layer-content">
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--accent)"></span>Single-Page UI</div>
+            <div class="box-desc">3,450-line monolithic HTML file with inline CSS &amp; JS. Three views: Graph (D3 force-directed), Page reader (markdown → HTML), and Manage panel (add sources, health check).</div>
+            <div class="box-tech">
+              <span class="tag">index.html</span>
+              <span class="tag purple">D3.js</span>
+              <span class="tag green">marked.js</span>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--purple)"></span>Graph Visualization</div>
+            <div class="box-desc">Force-directed node graph showing all wiki pages and their [[wikilink]] connections. Nodes colored by type (source, entity, concept, analysis).</div>
+            <div class="box-tech">
+              <span class="tag purple">d3-force</span>
+              <span class="tag purple">Canvas 2D</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arrow-row">
+        <div class="arrow">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3v11M6 10l4 4 4-4"/></svg>
+          <span class="arrow-label">fetch() → JSON</span>
+        </div>
+      </div>
+
+      <!-- Server layer -->
+      <div class="layer">
+        <div class="layer-label">Server</div>
+        <div class="layer-content">
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--green)"></span>Bun HTTP Server</div>
+            <div class="box-desc">Single-file TypeScript server (server.ts, ~390 lines). Serves the UI, exposes REST API, parses YAML frontmatter, and extracts [[wikilinks]]. Auto-reloads wiki data every 5 seconds.</div>
+            <div class="box-tech">
+              <span class="tag green">Bun.serve()</span>
+              <span class="tag green">TypeScript</span>
+              <span class="tag">port 5000</span>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--orange)"></span>wiki.sh</div>
+            <div class="box-desc">Bash control script for server lifecycle. Manages PID file at /tmp/llm-wiki-server.pid. Commands: start, stop, restart, status.</div>
+            <div class="box-tech">
+              <span class="tag orange">bash</span>
+              <span class="tag orange">nohup</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arrow-row">
+        <div class="arrow">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 3v11M6 10l4 4 4-4"/></svg>
+          <span class="arrow-label">readFile() / readdir()</span>
+        </div>
+      </div>
+
+      <!-- Data layer -->
+      <div class="layer">
+        <div class="layer-label">Data (Filesystem)</div>
+        <div class="layer-content">
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--blue)"></span>wiki/</div>
+            <div class="box-desc">LLM-authored markdown pages with YAML frontmatter (title, type, tags, sources). Types: source, entity, concept, analysis, comparison. Cross-linked via [[wikilinks]].</div>
+            <div class="box-tech">
+              <span class="tag blue">56 pages</span>
+              <span class="tag blue">index.md</span>
+              <span class="tag blue">log.md</span>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--pink)"></span>raw/</div>
+            <div class="box-desc">Immutable source material added by the human. Never modified. Ingested by the LLM into wiki pages. Can be added via UI (paste, upload, URL fetch).</div>
+            <div class="box-tech">
+              <span class="tag pink">32 sources</span>
+              <span class="tag pink">read-only</span>
+            </div>
+          </div>
+          <div class="box">
+            <div class="box-title"><span class="dot" style="background:var(--text-dim)"></span>Config Files</div>
+            <div class="box-desc">.wiki-queue.json holds pending actions (ingest, fix-issues) queued from the UI. .wiki-config.json stores settings like autoIngest toggle.</div>
+            <div class="box-tech">
+              <span class="tag">queue</span>
+              <span class="tag">config</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Arrow -->
+      <div class="arrow-row">
+        <div class="arrow">
+          <svg viewBox="0 0 20 20" fill="currentColor"><path d="M10 17V6M6 10l4-4 4 4"/></svg>
+          <span class="arrow-label">Claude CLI reads raw/ → writes wiki/</span>
+        </div>
+      </div>
+
+      <!-- LLM layer -->
+      <div class="layer">
+        <div class="layer-label">Intelligence Layer</div>
+        <div class="layer-content">
+          <div class="box" style="border-color: var(--accent); background: linear-gradient(135deg, var(--surface) 0%, rgba(226,164,78,0.04) 100%);">
+            <div class="box-title"><span class="dot" style="background:var(--accent)"></span>Claude (LLM)</div>
+            <div class="box-desc">The actual "brain" of the wiki. Runs via Claude Code CLI. Reads instructions from CLAUDE.md, processes the ingest/query/lint queue, writes all wiki content, manages cross-references, and maintains the index and changelog.</div>
+            <div class="box-tech">
+              <span class="tag">Claude Code CLI</span>
+              <span class="tag">CLAUDE.md</span>
+              <span class="tag">markdown I/O</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Workflows -->
+  <div class="arch-section">
+    <h3>Core Workflows</h3>
+    <div class="flow-grid">
+      <div class="flow-card">
+        <h4><span class="num">1</span>Ingest</h4>
+        <ul class="flow-steps">
+          <li>Human adds source to raw/ (paste, upload, or URL)</li>
+          <li>UI queues ingest request to .wiki-queue.json</li>
+          <li>Claude reads queue on conversation start</li>
+          <li>Reads raw source, discusses takeaways</li>
+          <li>Creates src-*.md summary page in wiki/</li>
+          <li>Updates or creates entity/concept pages</li>
+          <li>Adds [[wikilinks]] across all affected pages</li>
+          <li>Updates index.md and log.md</li>
+        </ul>
+      </div>
+      <div class="flow-card">
+        <h4><span class="num">2</span>Query</h4>
+        <ul class="flow-steps">
+          <li>Human asks a question about wiki knowledge</li>
+          <li>Claude reads index.md to find relevant pages</li>
+          <li>Reads pages, synthesizes an answer</li>
+          <li>Cites sources with [[wikilinks]]</li>
+          <li>If substantial: offers to file as analysis page</li>
+          <li>Updates index and log if new page created</li>
+        </ul>
+      </div>
+      <div class="flow-card">
+        <h4><span class="num">3</span>Lint</h4>
+        <ul class="flow-steps">
+          <li>Human requests health check</li>
+          <li>Claude scans all wiki pages</li>
+          <li>Finds contradictions, stale claims, orphans</li>
+          <li>Checks for missing cross-references</li>
+          <li>Identifies concepts needing their own page</li>
+          <li>Fixes what it can, reports the rest</li>
+          <li>Suggests new sources to investigate</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- API endpoints -->
+  <div class="arch-section">
+    <h3>REST API</h3>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;">
+      <table class="api-table">
+        <thead>
+          <tr><th>Method</th><th>Endpoint</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/graph</td><td class="api-desc">Node/edge data for the force-directed graph</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/pages</td><td class="api-desc">List all pages (slug, title, type, tags)</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/page/:slug</td><td class="api-desc">Full page content with metadata and links</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/search?q=</td><td class="api-desc">Ranked search across titles, slugs, tags, content</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/wiki/health</td><td class="api-desc">Broken links, orphans, pending raw sources, type counts</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/status</td><td class="api-desc">Server uptime, page count, last reload time</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/reload</td><td class="api-desc">Force re-read all wiki pages from disk</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/raw</td><td class="api-desc">List all raw source filenames</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="endpoint">/api/raw</td><td class="api-desc">Save raw source (paste JSON, file upload, or URL fetch)</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/config</td><td class="api-desc">Read wiki config (autoIngest toggle)</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="endpoint">/api/config</td><td class="api-desc">Update wiki config</td></tr>
+          <tr><td><span class="method get">GET</span></td><td class="endpoint">/api/queue</td><td class="api-desc">Read pending action queue</td></tr>
+          <tr><td><span class="method post">POST</span></td><td class="endpoint">/api/queue</td><td class="api-desc">Add action to queue (deduplicated)</td></tr>
+          <tr><td><span class="method delete">DEL</span></td><td class="endpoint">/api/queue</td><td class="api-desc">Clear the action queue</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- File tree -->
+  <div class="arch-section">
+    <h3>Project Structure</h3>
+    <div class="file-tree">
+<span class="dir">llm-wiki/</span>
+├── <span class="special">server.ts</span>         <span class="comment">  # Bun HTTP server — API + static serving (~390 lines)</span>
+├── <span class="special">wiki.sh</span>           <span class="comment">  # Server lifecycle (start/stop/restart/status)</span>
+├── <span class="file">CLAUDE.md</span>          <span class="comment">  # LLM instructions — the "brain's" operating manual</span>
+├── <span class="file">CHANGELOG.md</span>       <span class="comment">  # Release notes with random coding titles</span>
+├── <span class="file">VERSION</span>            <span class="comment">  # Current version (0.10)</span>
+├── <span class="dir">public/</span>
+│   ├── <span class="special">index.html</span>    <span class="comment">  # Monolithic SPA — graph, reader, manager (~3450 lines)</span>
+│   └── <span class="special">architecture.html</span> <span class="comment"># You are here</span>
+├── <span class="dir">wiki/</span>              <span class="comment">  # LLM-owned pages (56 markdown files)</span>
+│   ├── <span class="file">index.md</span>      <span class="comment">  # Content catalog — all pages with summaries</span>
+│   ├── <span class="file">log.md</span>        <span class="comment">  # Chronological activity log</span>
+│   ├── <span class="file">src-*.md</span>      <span class="comment">  # Source summaries (type: source)</span>
+│   └── <span class="file">*.md</span>          <span class="comment">  # Entities, concepts, analyses</span>
+├── <span class="dir">raw/</span>               <span class="comment">  # Immutable source material (32 files)</span>
+│   └── <span class="file">*.md</span>          <span class="comment">  # Articles, guides, transcripts</span>
+├── <span class="file">.wiki-queue.json</span>   <span class="comment">  # Pending UI actions for Claude</span>
+└── <span class="file">.wiki-config.json</span>  <span class="comment">  # Settings (autoIngest, etc.)</span>
+    </div>
+  </div>
+
+  <!-- Design philosophy -->
+  <div class="arch-section">
+    <h3>Design Decisions</h3>
+    <div class="layer-content">
+      <div class="box">
+        <div class="box-title"><span class="dot" style="background:var(--green)"></span>No Database</div>
+        <div class="box-desc">The filesystem IS the database. Markdown files are the source of truth. Git provides versioning. The server just reads and indexes them in-memory.</div>
+      </div>
+      <div class="box">
+        <div class="box-title"><span class="dot" style="background:var(--purple)"></span>No Build Step</div>
+        <div class="box-desc">Zero bundlers, zero frameworks. One HTML file with inline CSS/JS. Bun runs TypeScript natively. <code>bun run server.ts</code> and you're live.</div>
+      </div>
+      <div class="box">
+        <div class="box-title"><span class="dot" style="background:var(--accent)"></span>LLM-Native</div>
+        <div class="box-desc">The wiki is designed from the ground up to be written by an LLM. CLAUDE.md is the operating manual. The queue bridges UI actions to LLM processing. Markdown + YAML frontmatter is the lingua franca.</div>
+      </div>
+      <div class="box">
+        <div class="box-title"><span class="dot" style="background:var(--blue)"></span>Obsidian-Compatible</div>
+        <div class="box-desc">[[Wikilinks]], YAML frontmatter, and flat markdown files mean the wiki/ folder can be opened directly in Obsidian for an alternative view.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+async function loadStats() {
+  try {
+    const [statusRes, graphRes, rawRes] = await Promise.all([
+      fetch('/api/status'),
+      fetch('/api/graph'),
+      fetch('/api/raw'),
+    ]);
+    const status = await statusRes.json();
+    const graph = await graphRes.json();
+    const raw = await rawRes.json();
+
+    document.getElementById('stat-pages').textContent = graph.nodes.length;
+    document.getElementById('stat-sources').textContent = raw.length;
+    document.getElementById('stat-links').textContent = graph.edges.length;
+
+    const mins = Math.floor(status.uptime / 60);
+    const hrs = Math.floor(mins / 60);
+    if (hrs > 0) {
+      document.getElementById('stat-uptime').textContent = `${hrs}h ${mins % 60}m`;
+    } else {
+      document.getElementById('stat-uptime').textContent = `${mins}m`;
+    }
+  } catch {
+    document.getElementById('stat-uptime').textContent = '—';
+  }
+}
+loadStats();
+</script>
+
+</body>
+</html>

@@ -26,7 +26,7 @@ Vague prompts produce vague results. The guide contrasts generic questions ("Wha
 
 ## Testing and Validation
 
-Tests serve as an automated safety net. Set up test suites before modifying code, and use multiple models for cross-[[Verification]] — running output through a second AI like [[Gemini]] catches mistakes a single model misses.
+Tests serve as an automated safety net. Set up test suites before modifying code, and use multiple models for cross-[[Verification]] — running output through a second AI like Gemini catches mistakes a single model misses.
 
 ## Project Strategy
 

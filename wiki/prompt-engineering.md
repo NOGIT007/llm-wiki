@@ -5,7 +5,7 @@ created: 2026-04-07
 updated: 2026-04-07
 sources:
   - "[[src-5-claude-techniques]]"
-  - "[[src-3-steps-generic-to-expert]]"
+  - "[[src-three-step-prompting]]"
   - "[[src-claude-desktop-settings]]"
 tags:
   - prompting

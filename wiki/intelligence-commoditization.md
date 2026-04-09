@@ -6,7 +6,7 @@ updated: 2026-04-07
 sources:
   - "[[src-intelligence-as-a-commodity]]"
   - "[[src-gdpval-displacement]]"
-  - "[[src-jevons-paradox]]"
+  - "[[src-ai-jevons-paradox]]"
 tags:
   - economics
   - commoditization

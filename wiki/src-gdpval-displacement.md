@@ -15,11 +15,11 @@ tags:
 
 ## Key Thesis
 
-[[OpenAI]]'s [[GDPval]] benchmark measures not what AI can do but what it already does -- better, faster, and cheaper than humans in real professional work. The 70.9% displacement figure represents an economic wrecking ball for professional services, and the trajectory points to 90-100% by December 2026.
+[[OpenAI]]'s GDPval benchmark measures not what AI can do but what it already does -- better, faster, and cheaper than humans in real professional work. The 70.9% displacement figure represents an economic wrecking ball for professional services, and the trajectory points to 90-100% by December 2026.
 
 ## Important Claims
 
-[[GDPval]] is an economic displacement benchmark, not a capability test. It evaluates 44 occupations using real client requests with blinded expert evaluation across financial reconciliation, legal document review, marketing copy, data analysis, technical writing, and strategic recommendations.
+GDPval is an economic displacement benchmark, not a capability test. It evaluates 44 occupations using real client requests with blinded expert evaluation across financial reconciliation, legal document review, marketing copy, data analysis, technical writing, and strategic recommendations.
 
 **The breakdown of 70.9%:**
 - 40-50% of cases: AI output beats human work (blinded experts preferred it)
@@ -37,7 +37,7 @@ The SaaS business model faces disruption: per-seat pricing assumes human users, 
 ## Key Entities
 
 - Organization: [[OpenAI]]
-- Benchmark: [[GDPval]]
+- Benchmark: GDPval
 - Concepts: [[Intelligence Commoditization]], [[Jagged Frontier]], billable hours displacement
 
 ## Cross-References

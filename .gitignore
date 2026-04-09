@@ -5,3 +5,5 @@ plans/
 .playwright-cli/
 /tmp/
 *.log
+vault/
+node_modules/

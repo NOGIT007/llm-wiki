@@ -4,7 +4,7 @@ type: concept
 created: 2026-04-07
 updated: 2026-04-07
 sources:
-  - "[[src-what-s-really-happening-ai-capabilities]]"
+  - "[[src-ai-capabilities-at-work]]"
   - "[[src-the-201-gap]]"
   - "[[src-ai-changes-startups]]"
 tags:

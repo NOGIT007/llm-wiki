@@ -4,9 +4,9 @@ type: entity
 created: 2026-04-07
 updated: 2026-04-07
 sources:
-  - "[[src-beginners-guide-to-claude-desktop]]"
+  - "[[src-beginners-guide-claude-desktop]]"
   - "[[src-claude-desktop-settings]]"
-  - "[[src-train-claude-to-question-your-projects]]"
+  - "[[src-train-claude-to-question-projects]]"
 tags:
   - tool
   - desktop-app

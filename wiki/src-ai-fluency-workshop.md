@@ -33,4 +33,4 @@ Individual fluency is necessary but not sufficient. The workshop maps organizati
 
 ## Format and Outcomes
 
-Delivered on-site or remotely in half-day (two focused sessions) or full-day formats. Both cover the [[4D Framework]], organizational capabilities assessment, and hands-on work with participants' own use cases. Participants leave with a shared vocabulary for AI decisions, clear delegation criteria, leadership alignment on AI governance, and the 4D Framework as a practical tool for immediate use. The workshop feeds into the [[AI Training Programs]] progression described in the companion AI Mastery Program.
+Delivered on-site or remotely in half-day (two focused sessions) or full-day formats. Both cover the [[4D Framework]], organizational capabilities assessment, and hands-on work with participants' own use cases. Participants leave with a shared vocabulary for AI decisions, clear delegation criteria, leadership alignment on AI governance, and the 4D Framework as a practical tool for immediate use. The workshop feeds into the [[AI Adoption]] progression described in the companion AI Mastery Program.

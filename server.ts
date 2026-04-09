@@ -1,14 +1,24 @@
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile, mkdir, rename } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 const WIKI_DIR = join(import.meta.dir, "wiki");
 const RAW_DIR = join(import.meta.dir, "raw");
+const VAULT_DIR = join(import.meta.dir, "vault");
 const CONFIG_FILE = join(import.meta.dir, ".wiki-config.json");
 const QUEUE_FILE = join(import.meta.dir, ".wiki-queue.json");
 const NO_CACHE = {
   "cache-control": "no-store, no-cache, must-revalidate",
   "pragma": "no-cache",
 };
+
+// ── LLM Chat configuration ──
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || "";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
+const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+
+const WIKI_CHAT_SYSTEM_PROMPT = `You are a helpful assistant for a personal knowledge base wiki. Answer questions based on the provided wiki context. Cite pages using [[wikilinks]] format. Be concise and accurate. If the context doesn't contain enough information, say so honestly.`;
 
 interface WikiPage {
   slug: string;
@@ -20,6 +30,7 @@ interface WikiPage {
   sources: string[];
   content: string;
   links: string[];
+  vault: boolean;
 }
 
 function parseFrontmatter(raw: string): {
@@ -66,26 +77,17 @@ function extractWikilinks(text: string): string[] {
   return [...links];
 }
 
-async function loadWiki(): Promise<Map<string, WikiPage>> {
-  const pages = new Map<string, WikiPage>();
-  const files = await readdir(WIKI_DIR);
-
+async function loadDir(dir: string, isVault: boolean, pages: Map<string, WikiPage>) {
+  const files = await readdir(dir).catch(() => [] as string[]);
   for (const file of files) {
-    if (!file.endsWith(".md") || file === "index.md" || file === "log.md")
-      continue;
-
-    const raw = await readFile(join(WIKI_DIR, file), "utf-8");
+    if (!file.endsWith(".md") || file === "index.md" || file === "log.md") continue;
+    const raw = await readFile(join(dir, file), "utf-8");
     const slug = file.replace(/\.md$/, "");
     const { meta, content } = parseFrontmatter(raw);
     const links = extractWikilinks(content);
-
     if (Array.isArray(meta.sources)) {
-      for (const s of meta.sources) {
-        const srcLinks = extractWikilinks(s);
-        links.push(...srcLinks);
-      }
+      for (const s of meta.sources) links.push(...extractWikilinks(s));
     }
-
     pages.set(slug, {
       slug,
       title: meta.title || slug,
@@ -96,11 +98,20 @@ async function loadWiki(): Promise<Map<string, WikiPage>> {
       sources: Array.isArray(meta.sources) ? meta.sources : [],
       content,
       links: [...new Set(links)],
+      vault: isVault,
     });
   }
+}
 
+async function loadWiki(): Promise<Map<string, WikiPage>> {
+  const pages = new Map<string, WikiPage>();
+  await loadDir(WIKI_DIR, false, pages);
+  await loadDir(VAULT_DIR, true, pages);
   return pages;
 }
+
+// Ensure vault directory exists
+if (!existsSync(VAULT_DIR)) await mkdir(VAULT_DIR, { recursive: true });
 
 // Mutable — reloaded on demand
 let pages = await loadWiki();
@@ -125,6 +136,7 @@ function buildGraphData() {
       title: page.title,
       type: page.type,
       links: page.links.length,
+      vault: page.vault,
     });
     for (const link of page.links) {
       if (slugs.has(link) && link !== slug) {
@@ -146,10 +158,185 @@ function searchPages(query: string) {
     if (slug.includes(q)) score += 5;
     if (page.tags.some((t) => t.includes(q))) score += 3;
     if (page.content.toLowerCase().includes(q)) score += 1;
-    if (score > 0) results.push({ slug, title: page.title, type: page.type, score });
+    if (score > 0) results.push({ slug, title: page.title, type: page.type, score, vault: page.vault });
   }
 
   return results.sort((a, b) => b.score - a.score);
+}
+
+// ── LLM Chat helpers ──
+
+function gatherChatContext(query: string): { context: string; sources: string[] } {
+  const results = searchPages(query).slice(0, 5);
+  const sources: string[] = [];
+  const parts: string[] = [];
+  let charBudget = 6000;
+
+  for (const r of results) {
+    const p = pages.get(r.slug);
+    if (!p) continue;
+    const text = `## [[${p.slug}]] — ${p.title}\n${p.content}`;
+    if (parts.join('\n\n').length + text.length > charBudget) {
+      const remaining = charBudget - parts.join('\n\n').length;
+      if (remaining > 200) {
+        parts.push(text.slice(0, remaining) + '\n...(truncated)');
+        sources.push(p.slug);
+      }
+      break;
+    }
+    parts.push(text);
+    sources.push(p.slug);
+  }
+
+  return { context: parts.join('\n\n'), sources };
+}
+
+async function callMistral(system: string, user: string): Promise<string> {
+  const res = await fetch("https://api.mistral.ai/v1/chat/completions", {
+    method: "POST",
+    headers: { "authorization": `Bearer ${MISTRAL_API_KEY}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: "mistral-small-latest",
+      messages: [{ role: "system", content: system }, { role: "user", content: user }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Mistral API error: ${res.status} ${await res.text()}`);
+  const d = await res.json() as any;
+  return d.choices[0].message.content;
+}
+
+async function callClaude(system: string, user: string): Promise<string> {
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system,
+      messages: [{ role: "user", content: user }],
+    }),
+  });
+  if (!res.ok) throw new Error(`Claude API error: ${res.status} ${await res.text()}`);
+  const d = await res.json() as any;
+  return d.content[0].text;
+}
+
+async function callGemini(system: string, user: string): Promise<string> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: system }] },
+      contents: [{ parts: [{ text: user }] }],
+      generationConfig: { maxOutputTokens: 1024 },
+    }),
+  });
+  if (!res.ok) throw new Error(`Gemini API error: ${res.status} ${await res.text()}`);
+  const d = await res.json() as any;
+  return d.candidates[0].content.parts[0].text;
+}
+
+async function callLLM(model: string, system: string, user: string): Promise<string> {
+  if (model === "claude") return callClaude(system, user);
+  if (model === "gemini") return callGemini(system, user);
+  return callMistral(system, user);
+}
+
+// ── GCP Cloud Storage Backup ──
+const GCS_BUCKET = process.env.GOOGLE_CLOUD_STORAGE_BUCKET || "";
+
+interface BackupStatus {
+  lastBackup: string | null;
+  lastLabel: string | null;
+  filesUploaded: number;
+  inProgress: boolean;
+  error: string | null;
+}
+
+let backupStatus: BackupStatus = {
+  lastBackup: null, lastLabel: null, filesUploaded: 0, inProgress: false, error: null,
+};
+
+let cachedToken = { token: "", expiresAt: 0 };
+
+async function getAccessToken(): Promise<string> {
+  if (cachedToken.token && Date.now() < cachedToken.expiresAt) return cachedToken.token;
+  const proc = Bun.spawn(["gcloud", "auth", "application-default", "print-access-token"], {
+    stdout: "pipe", stderr: "pipe",
+  });
+  const token = (await new Response(proc.stdout).text()).trim();
+  const exitCode = await proc.exited;
+  if (exitCode !== 0 || !token) {
+    throw new Error("Failed to get GCP access token. Run: gcloud auth application-default login");
+  }
+  cachedToken = { token, expiresAt: Date.now() + 50 * 60 * 1000 };
+  return token;
+}
+
+async function uploadToGCS(objectPath: string, content: string, token: string): Promise<void> {
+  const url = `https://storage.googleapis.com/upload/storage/v1/b/${GCS_BUCKET}/o?uploadType=media&name=${encodeURIComponent(objectPath)}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "authorization": `Bearer ${token}`, "content-type": "text/plain; charset=utf-8" },
+    body: content,
+  });
+  if (!res.ok) throw new Error(`GCS upload failed for ${objectPath}: ${res.status}`);
+}
+
+async function uploadDirToGCS(dir: string, prefix: string, token: string): Promise<string[]> {
+  const manifest: string[] = [];
+  const files = await readdir(dir).catch(() => [] as string[]);
+  for (const f of files.filter(f => f.endsWith(".md"))) {
+    const content = await readFile(join(dir, f), "utf-8");
+    await uploadToGCS(`${prefix}/${f}`, content, token);
+    manifest.push(`${prefix}/${f}`);
+  }
+  return manifest;
+}
+
+async function runBackup(): Promise<void> {
+  if (!GCS_BUCKET) throw new Error("GOOGLE_CLOUD_STORAGE_BUCKET not set");
+  backupStatus.inProgress = true;
+  backupStatus.error = null;
+  try {
+    const token = await getAccessToken();
+    const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const prefix = `backups/${ts}`;
+    const manifest: string[] = [];
+
+    manifest.push(...await uploadDirToGCS(WIKI_DIR, `${prefix}/wiki`, token));
+    manifest.push(...await uploadDirToGCS(VAULT_DIR, `${prefix}/vault`, token));
+    manifest.push(...await uploadDirToGCS(RAW_DIR, `${prefix}/raw`, token));
+
+    // Upload config files
+    for (const [name, path] of [[".wiki-config.json", CONFIG_FILE], [".wiki-queue.json", QUEUE_FILE]] as const) {
+      try {
+        const content = await readFile(path, "utf-8");
+        await uploadToGCS(`${prefix}/${name}`, content, token);
+        manifest.push(`${prefix}/${name}`);
+      } catch {}
+    }
+
+    // Write manifest
+    await uploadToGCS(`${prefix}/manifest.json`, JSON.stringify({ timestamp: ts, files: manifest }, null, 2), token);
+
+    backupStatus = {
+      lastBackup: new Date().toISOString(),
+      lastLabel: ts,
+      filesUploaded: manifest.length,
+      inProgress: false,
+      error: null,
+    };
+  } catch (err: any) {
+    backupStatus.inProgress = false;
+    backupStatus.error = err.message;
+    throw err;
+  }
 }
 
 const server = Bun.serve({
@@ -160,6 +347,11 @@ const server = Bun.serve({
     // Serve HTML — always fresh from disk
     if (url.pathname === "/") {
       const html = await readFile(join(import.meta.dir, "public", "index.html"), "utf-8");
+      return new Response(html, { headers: { "content-type": "text/html", ...NO_CACHE } });
+    }
+
+    if (url.pathname === "/architecture") {
+      const html = await readFile(join(import.meta.dir, "public", "architecture.html"), "utf-8");
       return new Response(html, { headers: { "content-type": "text/html", ...NO_CACHE } });
     }
 
@@ -188,8 +380,8 @@ const server = Bun.serve({
     }
 
     if (url.pathname === "/api/pages") {
-      const list = [...pages.values()].map(({ slug, title, type, tags }) => ({
-        slug, title, type, tags,
+      const list = [...pages.values()].map(({ slug, title, type, tags, vault }) => ({
+        slug, title, type, tags, vault,
       }));
       return Response.json(list, { headers: NO_CACHE });
     }
@@ -254,6 +446,8 @@ const server = Bun.serve({
         typeCounts[page.type] = (typeCounts[page.type] || 0) + 1;
       }
 
+      const vaultCount = [...pages.values()].filter(p => p.vault).length;
+
       return Response.json({
         raw: {
           total: rawFiles.length,
@@ -262,6 +456,7 @@ const server = Bun.serve({
         },
         wiki: {
           totalPages: pages.size,
+          vaultCount,
           typeCounts,
           brokenLinks,
           orphans,
@@ -382,6 +577,76 @@ const server = Bun.serve({
       }
 
       return Response.json({ error: "Missing content or filename" }, { status: 400 });
+    }
+
+    // ── Chat endpoints ──
+    if (url.pathname === "/api/chat/models") {
+      let config: any = {};
+      try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
+      const models: { id: string; label: string }[] = [];
+      if (MISTRAL_API_KEY) models.push({ id: "mistral", label: "Mistral" });
+      if (ANTHROPIC_API_KEY) models.push({ id: "claude", label: "Claude" });
+      if (GEMINI_API_KEY) models.push({ id: "gemini", label: "Gemini" });
+      return Response.json({ models, default: config.chatModel || "mistral" }, { headers: NO_CACHE });
+    }
+
+    if (url.pathname === "/api/chat" && req.method === "POST") {
+      try {
+        const { message, model: reqModel } = await req.json() as { message: string; model?: string };
+        if (!message?.trim()) {
+          return Response.json({ error: "Message is required" }, { status: 400, headers: NO_CACHE });
+        }
+        let config: any = {};
+        try { config = JSON.parse(await readFile(CONFIG_FILE, "utf-8")); } catch {}
+        const model = reqModel || config.chatModel || "mistral";
+
+        const keyMap: Record<string, string> = { mistral: MISTRAL_API_KEY, claude: ANTHROPIC_API_KEY, gemini: GEMINI_API_KEY };
+        if (!keyMap[model]) {
+          return Response.json({ error: `No API key configured for ${model}` }, { status: 400, headers: NO_CACHE });
+        }
+
+        await reloadIfNeeded();
+        const { context, sources } = gatherChatContext(message);
+        const userPrompt = context
+          ? `Wiki context:\n\n${context}\n\n---\nQuestion: ${message}`
+          : `No relevant wiki pages found for context.\n\nQuestion: ${message}`;
+
+        const answer = await callLLM(model, WIKI_CHAT_SYSTEM_PROMPT, userPrompt);
+        return Response.json({ answer, sources, model }, { headers: NO_CACHE });
+      } catch (err: any) {
+        console.error("Chat error:", err);
+        return Response.json({ error: `Chat failed: ${err.message}` }, { status: 500, headers: NO_CACHE });
+      }
+    }
+
+    // ── Backup endpoints ──
+    if (url.pathname === "/api/backup/status") {
+      return Response.json(backupStatus, { headers: NO_CACHE });
+    }
+
+    if (url.pathname === "/api/backup" && req.method === "POST") {
+      if (backupStatus.inProgress) {
+        return Response.json({ error: "Backup already in progress" }, { status: 409, headers: NO_CACHE });
+      }
+      runBackup().catch(err => {
+        console.error("Backup error:", err);
+        backupStatus.error = err.message;
+        backupStatus.inProgress = false;
+      });
+      return Response.json({ ok: true, message: "Backup started" }, { headers: NO_CACHE });
+    }
+
+    // ── Vault move endpoint ──
+    if (url.pathname === "/api/vault/move" && req.method === "POST") {
+      const { slug } = await req.json() as { slug: string };
+      const page = pages.get(slug);
+      if (!page) return Response.json({ error: "Not found" }, { status: 404, headers: NO_CACHE });
+      const srcDir = page.vault ? VAULT_DIR : WIKI_DIR;
+      const dstDir = page.vault ? WIKI_DIR : VAULT_DIR;
+      await rename(join(srcDir, `${slug}.md`), join(dstDir, `${slug}.md`));
+      pages = await loadWiki();
+      lastLoad = Date.now();
+      return Response.json({ ok: true, vault: !page.vault }, { headers: NO_CACHE });
     }
 
     return new Response("Not found", { status: 404 });

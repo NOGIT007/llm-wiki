@@ -4,10 +4,10 @@ type: concept
 created: 2026-04-07
 updated: 2026-04-07
 sources:
-  - "[[src-how-and-when-ai-makes-mistakes]]"
-  - "[[src-beyond-the-hype-ai-agent-misalignment]]"
-  - "[[src-workspace-studio-automation]]"
-  - "[[src-what-s-really-happening-ai-capabilities]]"
+  - "[[src-how-ai-makes-mistakes]]"
+  - "[[src-ai-agent-misalignment-management]]"
+  - "[[src-workspace-studio-use-cases]]"
+  - "[[src-ai-capabilities-at-work]]"
 tags:
   - verification
   - quality

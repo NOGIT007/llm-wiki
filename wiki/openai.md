@@ -5,7 +5,7 @@ created: 2026-04-07
 updated: 2026-04-07
 sources:
   - "[[src-gdpval-displacement]]"
-  - "[[src-beyond-the-hype-ai-agent-misalignment]]"
+  - "[[src-ai-agent-misalignment-management]]"
   - "[[src-intelligence-as-a-commodity]]"
 tags:
   - organization
@@ -26,4 +26,4 @@ OpenAI is an AI company and the creator of the GPT model family and ChatGPT. In 
 
 ## See Also
 
-[[Anthropic]] | [[Claude]] | [[Reliability]]
+[[Anthropic]] | [[Claude]] | [[Verification]]

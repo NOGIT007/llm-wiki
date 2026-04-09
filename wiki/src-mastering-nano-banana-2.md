@@ -15,7 +15,7 @@ tags:
 
 # Mastering Nano Banana 2
 
-[[Nano Banana 2]] (technically Gemini 3.1 Flash Image) launched February 26, 2026 as [[Google]]'s latest AI image model inside the [[Gemini]] app. It represents a leap from "AI-generated" to professional-grade output at zero cost within the app.
+Nano Banana 2 (technically Gemini 3.1 Flash Image) launched February 26, 2026 as [[Google]]'s latest AI image model inside the Gemini app. It represents a leap from "AI-generated" to professional-grade output at zero cost within the app.
 
 ## Core Superpowers
 

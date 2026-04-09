@@ -53,7 +53,7 @@
 
   #app {
     display: grid;
-    grid-template-columns: var(--sidebar-width, 280px) 4px 1fr;
+    grid-template-columns: var(--sidebar-width, 300px) 4px 1fr;
     grid-template-rows: 52px 1fr;
     height: 100vh;
   }
@@ -319,7 +319,7 @@
     padding: 10px 12px 8px;
     display: flex;
     gap: 4px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
@@ -659,6 +659,41 @@
     color: var(--border);
   }
 
+  .vault-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    background: rgba(180, 160, 212, 0.15);
+    color: #b4a0d4;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+
+  .vault-lock {
+    color: #b4a0d4;
+    opacity: 0.7;
+    flex-shrink: 0;
+  }
+
+  .vault-move-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    padding: 4px 12px;
+    border-radius: var(--radius-sm, 6px);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: border-color 200ms ease, color 200ms ease;
+    margin-left: 8px;
+  }
+  .vault-move-btn:hover {
+    border-color: #b4a0d4;
+    color: #b4a0d4;
+  }
+
   /* ─── Page content typography ─── */
   #page-content {
     line-height: 1.75;
@@ -837,6 +872,225 @@
     font-size: 10px;
   }
 
+  /* ─── Chat View ─── */
+  #chat-view {
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: column;
+  }
+  #chat-view.active { display: flex; }
+
+  .chat-body {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .chat-landing {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    padding: 40px 20px;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .chat-landing.hidden { display: none; }
+
+  .chat-landing-icon {
+    margin-bottom: 24px;
+    color: var(--accent);
+    opacity: 0.6;
+    animation: icon-breathe 4s ease-in-out infinite;
+  }
+  @keyframes icon-breathe {
+    0%, 100% { opacity: 0.5; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.04); }
+  }
+
+  .chat-landing h3 {
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 400;
+    color: var(--text);
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+    animation: view-enter 400ms ease-out both;
+  }
+
+  .chat-landing p {
+    font-size: 14px;
+    color: var(--text-dim);
+    margin-bottom: 32px;
+    animation: view-enter 400ms 80ms ease-out both;
+  }
+
+  .chat-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 44px;
+    max-width: 580px;
+    animation: view-enter 400ms 160ms ease-out both;
+  }
+
+  .chat-chip {
+    padding: 9px 18px;
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 200ms ease;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .chat-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(226, 164, 78, 0.08);
+  }
+  .chat-chip .chip-arrow {
+    color: var(--text-dim);
+    font-size: 11px;
+    transition: all 200ms ease;
+  }
+  .chat-chip:hover .chip-arrow { color: var(--accent); transform: translateX(1px); }
+
+  .chat-recent {
+    width: 100%;
+    max-width: 520px;
+    animation: view-enter 400ms 240ms ease-out both;
+  }
+  .chat-recent-header {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim);
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .chat-recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 11px 12px;
+    margin: 0 -12px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition);
+    font-size: 13px;
+    color: var(--text-secondary);
+    border-top: 1px solid var(--border-subtle);
+  }
+  .chat-recent-item:hover { color: var(--text); background: var(--accent-hover); }
+  .chat-recent-time {
+    font-size: 11px;
+    color: var(--text-dim);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+    margin-left: 16px;
+  }
+
+  /* Chat results */
+  .chat-results {
+    width: 100%;
+    max-width: 720px;
+    padding: 32px 48px 20px;
+    margin: 0 auto;
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .chat-results.active { display: flex; }
+
+  .chat-q {
+    padding: 14px 20px;
+    background: var(--accent-dim);
+    border: 1px solid rgba(226, 164, 78, 0.15);
+    border-left: 3px solid var(--accent);
+    border-radius: 2px var(--radius) var(--radius) 2px;
+    font-size: 14px;
+    font-style: italic;
+    font-family: var(--font-display);
+    color: var(--text);
+    line-height: 1.5;
+    animation: view-enter 200ms ease-out both;
+  }
+
+  .chat-answer {
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--text);
+    animation: view-enter 300ms 100ms ease-out both;
+  }
+  .chat-answer h2 { font-family: var(--font-display); font-size: 20px; font-weight: 500; margin: 24px 0 10px; }
+  .chat-answer h3 { font-family: var(--font-display); font-size: 16px; font-weight: 500; margin: 18px 0 8px; }
+  .chat-answer p { margin: 0 0 12px; }
+  .chat-answer strong { color: var(--text); font-weight: 600; }
+  .chat-answer code { font-family: var(--font-mono); background: var(--surface-raised); padding: 2px 6px; border-radius: 4px; font-size: 13px; color: var(--orange); }
+  .chat-answer ul, .chat-answer ol { padding-left: 22px; margin: 0 0 12px; }
+  .chat-answer li { margin-bottom: 4px; }
+  .chat-answer a.wikilink { color: var(--accent); cursor: pointer; text-decoration: none; border-bottom: 1px solid rgba(226, 164, 78, 0.3); }
+  .chat-answer a.wikilink:hover { border-bottom-color: var(--accent); }
+
+  .chat-sources {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    animation: view-enter 300ms 200ms ease-out both;
+  }
+  .chat-sources-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); width: 100%; margin-bottom: 4px; }
+  .chat-source-tag { font-size: 11px; padding: 4px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; color: var(--text-secondary); cursor: pointer; transition: all var(--transition); text-decoration: none; }
+  .chat-source-tag:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+
+  .chat-thinking {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 48px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+    animation: view-enter 200ms 100ms ease-out both;
+  }
+  .chat-thinking .dots span { display: inline-block; width: 5px; height: 5px; background: var(--accent); border-radius: 50%; margin: 0 2px; animation: chat-dot 1.4s ease-in-out infinite; }
+  .chat-thinking .dots span:nth-child(2) { animation-delay: 0.2s; }
+  .chat-thinking .dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes chat-dot { 0%, 100% { opacity: 0.2; transform: scale(0.7); } 50% { opacity: 1; transform: scale(1.1); } }
+
+  /* Chat input */
+  .chat-input-wrap { padding: 14px 48px 38px; border-top: 1px solid var(--border); background: var(--surface); display: flex; justify-content: center; }
+  .chat-input-row { width: 100%; max-width: 720px; display: flex; gap: 8px; align-items: center; }
+  .chat-input { flex: 1; padding: 12px 18px; background: var(--bg); border: 1px solid var(--border); border-radius: 24px; color: var(--text); font-family: var(--font-body); font-size: 14px; outline: none; transition: all 200ms ease; }
+  .chat-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(226, 164, 78, 0.08); }
+  .chat-input::placeholder { color: var(--text-dim); }
+  .chat-btn { padding: 10px 22px; background: var(--accent); border: none; border-radius: 24px; color: var(--bg); font-family: var(--font-body); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 200ms ease; flex-shrink: 0; }
+  .chat-btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+  .chat-btn:active { transform: translateY(0); }
+  .chat-btn:disabled { opacity: 0.3; cursor: default; filter: none; transform: none; }
+  .chat-clear { padding: 10px 16px; background: transparent; border: 1px solid var(--border); border-radius: 24px; color: var(--text-dim); font-family: var(--font-body); font-size: 13px; cursor: pointer; transition: all var(--transition); flex-shrink: 0; }
+  .chat-clear:hover { border-color: var(--text-dim); color: var(--text-secondary); }
+  .chat-model-select { padding: 8px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; color: var(--text-secondary); font-family: var(--font-body); font-size: 12px; outline: none; cursor: pointer; flex-shrink: 0; transition: border-color 200ms ease; }
+  .chat-model-select:focus { border-color: var(--accent); }
+  .chat-model-badge { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
   /* ─── Manage View ─── */
   #manage-view {
     width: 100%;
@@ -872,7 +1126,7 @@
   /* Health cards grid */
   .health-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 12px;
     margin-bottom: 32px;
   }
@@ -1566,12 +1820,16 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
       Add Source
     </button>
+    <a class="github-btn" href="/architecture" target="_blank" title="Architecture">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg>
+    </a>
     <a id="github-link" class="github-btn" href="#" target="_blank" rel="noopener" style="display:none">
       <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
     </a>
     <div class="view-toggle">
       <button id="btn-graph" class="active">Graph</button>
       <button id="btn-page">Page</button>
+      <button id="btn-chat">Chat</button>
       <button id="btn-manage">Manage</button>
     </div>
   </header>
@@ -1617,6 +1875,34 @@
       </div>
     </div>
 
+    <div id="chat-view">
+      <div class="chat-body">
+        <div class="chat-landing" id="chat-landing">
+          <svg class="chat-landing-icon" width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="6" y="8" width="36" height="28" rx="4"/>
+            <path d="M6 16h36"/>
+            <circle cx="14" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="20" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            <circle cx="26" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+            <path d="M14 24h20M14 30h12"/>
+          </svg>
+          <h3>Query your wiki</h3>
+          <p>Ask questions about your knowledge base in plain English.</p>
+          <div class="chat-suggestions" id="chat-suggestions"></div>
+          <div class="chat-recent" id="chat-recent"></div>
+        </div>
+        <div class="chat-results" id="chat-results"></div>
+      </div>
+      <div class="chat-input-wrap">
+        <div class="chat-input-row">
+          <select class="chat-model-select" id="chat-model-select" onchange="saveChatModel(this.value)" title="Select LLM model"></select>
+          <input type="text" class="chat-input" id="chat-input" placeholder="Ask about your wiki..." autocomplete="off">
+          <button class="chat-btn" id="chat-ask-btn" onclick="askChat()">Ask</button>
+          <button class="chat-clear" onclick="clearChat()">Clear</button>
+        </div>
+      </div>
+    </div>
+
     <div id="manage-view">
       <div class="manage-inner">
         <div class="manage-header">
@@ -1634,6 +1920,7 @@
           </label>
         </div>
         <div class="health-grid" id="health-grid"></div>
+        <div class="manage-section" id="section-backup"></div>
         <div class="manage-section" id="section-pending"></div>
         <div class="manage-section" id="section-sources"></div>
         <div class="manage-section" id="section-issues"></div>
@@ -2047,9 +2334,10 @@ function renderSidebar(pages) {
     html += `<div class="sidebar-section"><h3>${label} <span class="count">${groups[type].length}</span></h3>`;
     for (const p of groups[type]) {
       const isActive = p.slug === currentSlug;
+      const lockSvg = p.vault ? ' <svg class="vault-lock" width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm2.5 6H5.5V5a2.5 2.5 0 1 1 5 0v2z"/></svg>' : '';
       html += `<div class="sidebar-item${isActive ? ' active' : ''}" tabindex="0" data-slug="${p.slug}" onclick="openPage('${p.slug}')">
         <span class="type-dot ${p.type}"></span>
-        <span>${p.title}</span>
+        <span>${p.title}${lockSvg}</span>
       </div>`;
     }
     html += '</div>';
@@ -2066,17 +2354,21 @@ function renderSidebar(pages) {
 function showView(view) {
   document.getElementById('graph-view').classList.toggle('active', view === 'graph');
   document.getElementById('page-view').classList.toggle('active', view === 'page');
+  document.getElementById('chat-view').classList.toggle('active', view === 'chat');
   document.getElementById('manage-view').classList.toggle('active', view === 'manage');
   document.getElementById('welcome').classList.toggle('active', false);
   document.getElementById('btn-graph').classList.toggle('active', view === 'graph');
   document.getElementById('btn-page').classList.toggle('active', view === 'page');
+  document.getElementById('btn-chat').classList.toggle('active', view === 'chat');
   document.getElementById('btn-manage').classList.toggle('active', view === 'manage');
   if (view === 'graph') resizeCanvas();
+  if (view === 'chat') initChatView();
   if (view === 'manage') loadManageView();
 }
 
 document.getElementById('btn-graph').addEventListener('click', () => showView('graph'));
 document.getElementById('btn-page').addEventListener('click', () => showView('page'));
+document.getElementById('btn-chat').addEventListener('click', () => showView('chat'));
 document.getElementById('btn-manage').addEventListener('click', () => showView('manage'));
 
 // ── Page view ──
@@ -2090,9 +2382,11 @@ async function openPage(slug) {
   document.getElementById('page-title').textContent = page.title;
 
   let meta = `<span class="page-tag type-tag">${page.type}</span>`;
+  if (page.vault) meta += `<span class="vault-badge"><svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a4 4 0 0 0-4 4v2H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-1V5a4 4 0 0 0-4-4zm2.5 6H5.5V5a2.5 2.5 0 1 1 5 0v2z"/></svg> Vault</span>`;
   if (page.created) meta += `<span class="page-meta-sep">&middot;</span><span>Created ${page.created}</span>`;
   if (page.tags.length) meta += `<span class="page-meta-sep">&middot;</span>`;
   for (const tag of page.tags) meta += `<span class="page-tag">${tag}</span>`;
+  meta += `<button class="vault-move-btn" onclick="toggleVault('${page.slug}')">${page.vault ? 'Make Public' : 'Move to Vault'}</button>`;
   document.getElementById('page-meta').innerHTML = meta;
 
   document.getElementById('page-content').innerHTML = renderMarkdown(page.content);
@@ -2104,6 +2398,25 @@ async function openPage(slug) {
   document.querySelectorAll('.sidebar-item').forEach(el => {
     el.classList.toggle('active', el.dataset.slug === slug);
   });
+}
+
+async function toggleVault(slug) {
+  const res = await fetch('/api/vault/move', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ slug }),
+  });
+  if (!res.ok) return;
+  const [pagesRes, graphRes] = await Promise.all([
+    fetch('/api/pages').then(r => r.json()),
+    fetch('/api/graph').then(r => r.json()),
+  ]);
+  allPages = pagesRes;
+  graphData = graphRes;
+  slugSet = new Set(allPages.map(p => p.slug));
+  renderSidebar(allPages);
+  initGraph();
+  openPage(slug);
 }
 
 function renderMarkdown(md) {
@@ -2498,6 +2811,15 @@ function draw() {
     ctx.fill();
     ctx.shadowBlur = 0;
 
+    // Vault dashed ring
+    if (n.vault && !isFocused) {
+      ctx.strokeStyle = '#b4a0d4';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 3]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
     // Hover/selected ring
     if (isFocused) {
       ctx.strokeStyle = isSelected ? 'rgba(226, 164, 78, 0.9)' : 'rgba(232, 228, 222, 0.9)';
@@ -2605,7 +2927,8 @@ canvas.addEventListener('mousemove', (e) => {
       tooltip.style.display = 'block';
       tooltip.style.left = (e.clientX - rect.left + 12) + 'px';
       tooltip.style.top = (e.clientY - rect.top - 30) + 'px';
-      tooltip.innerHTML = `<strong>${node.title}</strong><br><span style="color:var(--text-dim)">${node.type} &middot; ${node.links} links</span>`;
+      const vaultLabel = node.vault ? ' &middot; \u{1F512} vault' : '';
+      tooltip.innerHTML = `<strong>${node.title}</strong><br><span style="color:var(--text-dim)">${node.type} &middot; ${node.links} links${vaultLabel}</span>`;
     } else {
       tooltip.style.display = 'none';
     }
@@ -2642,6 +2965,158 @@ canvas.addEventListener('wheel', (e) => {
   panY = my - (my - panY) * (scale / oldScale);
 }, { passive: false });
 
+// ── Chat View ──
+let chatHistory = JSON.parse(localStorage.getItem('wiki-chat-history') || '[]');
+let chatBusy = false;
+
+const CHAT_SUGGESTIONS = [
+  'What entities are in the wiki?',
+  'Summarize AI security risks',
+  'How does Jevons Paradox apply to AI?',
+  'What is the 4D Framework?',
+  'Compare Claude Code vs Claude Desktop',
+  'What prompt engineering techniques exist?',
+  'List all sources about NotebookLM',
+];
+
+function initChatView() {
+  loadChatModels();
+  renderChatSuggestions();
+  renderChatRecent();
+  document.getElementById('chat-input').focus();
+}
+
+async function loadChatModels() {
+  try {
+    const data = await fetch('/api/chat/models').then(r => r.json());
+    const sel = document.getElementById('chat-model-select');
+    if (!sel || !data.models?.length) return;
+    sel.innerHTML = data.models.map(m =>
+      `<option value="${m.id}"${m.id === data.default ? ' selected' : ''}>${m.label}</option>`
+    ).join('');
+  } catch {}
+}
+
+async function saveChatModel(model) {
+  await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ chatModel: model }),
+  });
+}
+
+function renderChatSuggestions() {
+  document.getElementById('chat-suggestions').innerHTML = CHAT_SUGGESTIONS.map(s =>
+    `<button class="chat-chip" onclick="askChatWith('${s.replace(/'/g, "\\'")}')"><span class="chip-arrow">&#9656;</span> ${s}</button>`
+  ).join('');
+}
+
+function renderChatRecent() {
+  const el = document.getElementById('chat-recent');
+  if (chatHistory.length === 0) { el.innerHTML = ''; return; }
+  const recent = chatHistory.slice(-5).reverse();
+  el.innerHTML = `
+    <div class="chat-recent-header">Recent Queries</div>
+    ${recent.map(h => `
+      <div class="chat-recent-item" onclick="askChatWith('${h.question.replace(/'/g, "\\'")}')">
+        <span>${h.question}</span>
+        <span class="chat-recent-time">${formatChatTime(h.timestamp)}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function formatChatTime(ts) {
+  const d = new Date(ts);
+  const now = new Date();
+  const diff = now - d;
+  if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+  if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
+function askChatWith(question) {
+  document.getElementById('chat-input').value = question;
+  askChat();
+}
+
+async function askChat() {
+  const input = document.getElementById('chat-input');
+  const question = input.value.trim();
+  if (!question || chatBusy) return;
+
+  chatBusy = true;
+  input.value = '';
+  document.getElementById('chat-ask-btn').disabled = true;
+
+  document.getElementById('chat-landing').classList.add('hidden');
+  const results = document.getElementById('chat-results');
+  results.classList.add('active');
+  results.innerHTML = `
+    <div class="chat-q">${question}</div>
+    <div class="chat-thinking">
+      <div class="dots"><span></span><span></span><span></span></div>
+      Searching wiki and thinking...
+    </div>
+  `;
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: question, model: document.getElementById('chat-model-select')?.value }),
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      results.innerHTML = `
+        <div class="chat-q">${question}</div>
+        <div class="chat-answer" style="color:var(--red)">${data.error}</div>
+      `;
+    } else {
+      const rendered = renderMarkdown(data.answer);
+      const sourceTags = (data.sources || []).map(slug => {
+        const page = allPages.find(p => p.slug === slug);
+        const title = page ? page.title : slug;
+        return `<a class="chat-source-tag" onclick="openPage('${slug}')">${title}</a>`;
+      }).join('');
+
+      const modelBadge = data.model ? `<div class="chat-model-badge">Answered by ${data.model}</div>` : '';
+      results.innerHTML = `
+        <div class="chat-q">${question}</div>
+        <div class="chat-answer">${rendered}</div>
+        ${modelBadge}
+        ${sourceTags ? `<div class="chat-sources"><span class="chat-sources-label">Sources consulted</span>${sourceTags}</div>` : ''}
+      `;
+
+      chatHistory.push({ question, timestamp: new Date().toISOString() });
+      if (chatHistory.length > 20) chatHistory = chatHistory.slice(-20);
+      localStorage.setItem('wiki-chat-history', JSON.stringify(chatHistory));
+    }
+  } catch (err) {
+    results.innerHTML = `
+      <div class="chat-q">${question}</div>
+      <div class="chat-answer" style="color:var(--red)">Failed to connect. Is the server running?</div>
+    `;
+  }
+
+  chatBusy = false;
+  document.getElementById('chat-ask-btn').disabled = false;
+}
+
+function clearChat() {
+  document.getElementById('chat-results').classList.remove('active');
+  document.getElementById('chat-results').innerHTML = '';
+  document.getElementById('chat-landing').classList.remove('hidden');
+  document.getElementById('chat-input').value = '';
+  renderChatRecent();
+  document.getElementById('chat-input').focus();
+}
+
+document.getElementById('chat-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askChat(); }
+});
+
 // ── Manage View ──
 async function loadConfig() {
   try {
@@ -2658,13 +3133,14 @@ async function loadConfig() {
 
 async function loadManageView() {
   try {
-    const [healthRes, configRes, queueRes] = await Promise.all([
+    const [healthRes, configRes, queueRes, backupRes] = await Promise.all([
       fetch('/api/wiki/health').then(r => r.json()),
       fetch('/api/config').then(r => r.json()),
       fetch('/api/queue').then(r => r.json()),
+      fetch('/api/backup/status').then(r => r.json()),
     ]);
     document.getElementById('auto-ingest-toggle').checked = configRes.autoIngest || false;
-    renderManageView(healthRes, queueRes);
+    renderManageView(healthRes, queueRes, backupRes);
   } catch {
     document.getElementById('health-grid').innerHTML = '<div class="manage-empty">Failed to load wiki health data</div>';
   }
@@ -2718,13 +3194,38 @@ async function queueFixIssues() {
   loadManageView();
 }
 
+async function triggerBackup() {
+  try {
+    const res = await fetch('/api/backup', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      showToast('Backup started — uploading to GCS...');
+      // Poll for completion
+      const poll = setInterval(async () => {
+        const status = await fetch('/api/backup/status').then(r => r.json());
+        if (!status.inProgress) {
+          clearInterval(poll);
+          if (status.error) showToast(`Backup failed: ${status.error}`);
+          else showToast(`Backup complete — ${status.filesUploaded} files uploaded`);
+          loadManageView();
+        }
+      }, 2000);
+    } else {
+      showToast(`Backup failed: ${data.error}`);
+    }
+  } catch (err) {
+    showToast(`Backup failed: ${err.message}`);
+  }
+  loadManageView();
+}
+
 async function clearQueue() {
   await fetch('/api/queue', { method: 'DELETE' });
   showToast('Queue cleared');
   loadManageView();
 }
 
-function renderManageView(data, queue = []) {
+function renderManageView(data, queue = [], backup = {}) {
   const { raw, wiki } = data;
   const pendingCount = raw.pending.length;
   const brokenCount = wiki.brokenLinks.length;
@@ -2748,13 +3249,34 @@ function renderManageView(data, queue = []) {
     <div class="health-card">
       <div class="card-label">Wiki Pages</div>
       <div class="card-value">${wiki.totalPages}</div>
-      <div class="card-detail">${Object.entries(wiki.typeCounts).map(([t,c]) => `${c} ${t}`).join(', ')}</div>
+      <div class="card-detail">${Object.entries(wiki.typeCounts).map(([t,c]) => `${c} ${t}`).join(', ')}${wiki.vaultCount ? `, ${wiki.vaultCount} vault` : ''}</div>
     </div>
     <div class="health-card">
       <div class="card-label">Queued Actions</div>
       <div class="card-value ${queueCount > 0 ? 'warn' : 'good'}">${queueCount}</div>
       <div class="card-detail">${queueCount > 0 ? `${queueCount} waiting for Claude` : 'Queue empty'}${queueCount > 0 ? ' <a onclick="clearQueue()" style="color:var(--red);cursor:pointer;margin-left:4px">clear</a>' : ''}</div>
     </div>
+    <div class="health-card">
+      <div class="card-label">Cloud Backup</div>
+      <div class="card-value ${backup.lastBackup ? 'good' : ''}">${backup.lastBackup ? '&#10003;' : '&mdash;'}</div>
+      <div class="card-detail">${backup.inProgress ? 'In progress...' : backup.lastBackup ? new Date(backup.lastBackup).toLocaleDateString() : 'Never'}</div>
+    </div>
+  `;
+
+  // Backup section
+  const backupEl = document.getElementById('section-backup');
+  backupEl.innerHTML = `
+    <div class="manage-section-header">
+      <h3>Cloud Backup</h3>
+      <div class="manage-actions">
+        ${backup.lastBackup ? `<span class="section-count">${backup.filesUploaded} files &middot; ${backup.lastLabel}</span>` : `<span class="section-count">gs://kuskwiki</span>`}
+        <button class="manage-action-btn primary" onclick="triggerBackup()" ${backup.inProgress ? 'disabled' : ''}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="M12 13v6"/><path d="m9 16 3-3 3 3"/></svg>
+          ${backup.inProgress ? 'Backing up...' : 'Backup to GCS'}
+        </button>
+      </div>
+    </div>
+    ${backup.error ? `<div style="padding:8px 16px;color:var(--red);font-size:13px;">Error: ${backup.error}</div>` : ''}
   `;
 
   // Pending sources section

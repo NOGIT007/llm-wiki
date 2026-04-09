@@ -8,8 +8,8 @@ sources:
   - "[[src-notebooklm-research-workflows]]"
   - "[[src-notebooklm-tools]]"
   - "[[src-notebooklm-data-grid]]"
-  - "[[src-nano-banana-2]]"
-  - "[[src-workspace-studio-automation]]"
+  - "[[src-mastering-nano-banana-2]]"
+  - "[[src-workspace-studio-use-cases]]"
 tags:
   - organization
   - tech-company

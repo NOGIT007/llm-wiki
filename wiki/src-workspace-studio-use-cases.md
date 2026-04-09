@@ -14,7 +14,7 @@ tags:
 
 # Workspace Studio Use Cases with Automation
 
-A practical playbook for identifying which [[Google Workspace]] workflows are ready for AI automation with Google Workspace Studio, organized by how much human oversight each task requires. The gap between what [[AI Agents]] promise and what they deliver is real — closing it starts with knowing which tasks to hand off and how much supervision each needs.
+A practical playbook for identifying which [[Google]] workflows are ready for AI automation with Google Workspace Studio, organized by how much human oversight each task requires. The gap between what [[AI Agents]] promise and what they deliver is real — closing it starts with knowing which tasks to hand off and how much supervision each needs.
 
 ## Three Reliability Tiers
 
