@@ -6,10 +6,10 @@ A personal knowledge base maintained by an LLM. The human curates sources, asks 
 
 ```
 raw/            # Raw sources — immutable, never modify. Read only.
-raw/assets/     # Images and attachments referenced by sources
 wiki/           # LLM-owned markdown pages. Create, update, delete freely.
 wiki/index.md   # Content catalog — all pages listed with summaries
 wiki/log.md     # Chronological activity log
+vault/          # Private wiki pages — gitignored, never committed. Same format as wiki/.
 ```
 
 ## Page Format
@@ -38,13 +38,25 @@ tags:
 ## Server & UI
 
 - Server: `bun run server.ts` (port 5000), control via `./wiki.sh start|stop|restart|status`
-- UI: `http://localhost:5000` — Graph, Page, and Manage views
+- UI: `http://localhost:5000` — Graph, Page, Chat, and Manage views
 - Add Source: UI modal (paste, upload, URL) saves to `raw/` and auto-queues ingestion
+
+### Chat
+
+The Chat view queries the wiki via LLM. Model selection (Mistral default, Claude, Gemini) is in the chat input bar. Preference saved to `.wiki-config.json` as `chatModel`.
+
+### Vault
+
+Pages in `vault/` are private — loaded alongside `wiki/` pages but excluded from git. Move pages between wiki and vault via the toggle button in page view or `POST /api/vault/move`.
+
+### Backup
+
+`POST /api/backup` uploads wiki/, vault/, raw/, and config files to GCS (`gs://kuskwiki/backups/{timestamp}/`). Requires `gcloud auth application-default login`. Trigger from Manage view.
 
 ### Queue & Config Files
 
 - `.wiki-queue.json` — pending actions queued from the UI (ingest requests, fix-issues)
-- `.wiki-config.json` — settings (e.g. `autoIngest: true`)
+- `.wiki-config.json` — settings (e.g. `autoIngest: true`, `chatModel: "mistral"`)
 
 **On conversation start**, check the queue:
 1. Read `.wiki-queue.json` — if it has items, process them
@@ -93,6 +105,11 @@ Triggered when the user asks to health-check the wiki.
 3. Fix what can be fixed automatically (missing links, orphans)
 4. Suggest new sources or questions to investigate
 5. Append a lint entry to `wiki/log.md`
+
+## Testing
+
+- API tests: `bun test server.test.ts`
+- UI tests: `npx playwright test` (requires server running on port 5000)
 
 ## Cross-Referencing Rules
 
