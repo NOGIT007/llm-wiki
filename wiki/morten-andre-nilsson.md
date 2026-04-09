@@ -8,7 +8,7 @@ sources:
   - "[[src-training-ai-agents]]"
   - "[[src-ai-fluency-workshop]]"
   - "[[src-ai-mastery-program]]"
-  - "[[src-train-claude-to-question-your-projects]]"
+  - "[[src-train-claude-to-question-projects]]"
 tags:
   - person
   - author

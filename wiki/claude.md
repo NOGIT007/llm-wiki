@@ -5,14 +5,14 @@ created: 2026-04-07
 updated: 2026-04-07
 sources:
   - "[[src-5-claude-techniques]]"
-  - "[[src-beginners-guide-to-claude-desktop]]"
+  - "[[src-beginners-guide-claude-desktop]]"
   - "[[src-claude-code-skills]]"
   - "[[src-claude-coworker-framework]]"
   - "[[src-claude-desktop-settings]]"
-  - "[[src-how-and-when-ai-makes-mistakes]]"
+  - "[[src-how-ai-makes-mistakes]]"
   - "[[src-how-to-solve-hallucinations]]"
   - "[[src-master-claude-code-guide]]"
-  - "[[src-train-claude-to-question-your-projects]]"
+  - "[[src-train-claude-to-question-projects]]"
 tags:
   - ai-assistant
   - llm
@@ -33,7 +33,7 @@ Claude is an AI assistant built by [[Anthropic]]. It is the core model powering 
 
 ## Role in the Corpus
 
-Claude appears as both the subject of [[Prompt Engineering]] techniques (memory injection, reverse prompting, constraint cascades, role stacking, [[Verification]] loops) and as the runtime for agentic workflows (skills, agent swarms, CLAUDE.md project files). Sources frequently address managing [[Hallucinations]] and building [[Reliability]] into Claude-based systems.
+Claude appears as both the subject of [[Prompt Engineering]] techniques (memory injection, reverse prompting, constraint cascades, role stacking, [[Verification]] loops) and as the runtime for agentic workflows (skills, agent swarms, CLAUDE.md project files). Sources frequently address managing [[Hallucinations]] and building [[Verification]] into Claude-based systems.
 
 ## See Also
 

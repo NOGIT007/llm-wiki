@@ -6,7 +6,7 @@ updated: 2026-04-07
 sources:
   - "[[src-how-to-solve-hallucinations]]"
   - "[[src-6-ai-security-realities]]"
-  - "[[src-how-and-when-ai-makes-mistakes]]"
+  - "[[src-how-ai-makes-mistakes]]"
 tags:
   - reliability
   - failure-modes
