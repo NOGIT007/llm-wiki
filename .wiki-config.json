@@ -1,3 +1,4 @@
 {
-  "autoIngest": true
+  "autoIngest": true,
+  "chatModel": "mistral"
 }
