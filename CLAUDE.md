@@ -5,18 +5,25 @@ A personal knowledge base maintained by an LLM. The human curates sources, asks 
 ## Directory Structure
 
 ```
-server.ts         # HTTP router — imports modules from src/
-src/              # Server modules (types, vaults, search, chat, backup, frontmatter, filelock, paths)
+server.ts             # HTTP router — imports modules from src/
+server.test.ts        # API tests (bun test)
+wiki.ui.test.ts       # UI tests (Playwright)
+playwright.config.ts  # Playwright config
+wiki.sh               # Server control: ./wiki.sh start|stop|restart|status
+VERSION               # Current version (semver)
+CHANGELOG.md          # Release history
+changelogs/           # Per-version changelog files
+src/                  # Server modules (types, vaults, search, chat, backup, frontmatter, filelock, paths)
 public/
-  index.html      # Slim HTML shell
-  styles.css      # All CSS
-  js/             # JS modules (state, vault, search, keyboard, sidebar, views, page, graph, chat, manage, status, modal)
-  architecture.html
-raw/              # Raw sources — immutable, never modify. Read only.
-wiki/             # LLM-owned markdown pages. Create, update, delete freely.
-wiki/index.md     # Content catalog — all pages listed with summaries
-wiki/log.md       # Chronological activity log
-vaults/           # Additional vaults — gitignored. Each vault has its own wiki/ and raw/.
+  index.html          # Slim HTML shell
+  styles.css          # All CSS
+  js/                 # JS modules (state, vault, search, keyboard, sidebar, views, page, graph, chat, manage, status, modal)
+  architecture.html   # Architecture diagram
+raw/                  # Raw sources — immutable, never modify. Read only.
+wiki/                 # LLM-owned markdown pages. Create, update, delete freely.
+wiki/index.md         # Content catalog — all pages listed with summaries
+wiki/log.md           # Chronological activity log
+vaults/               # Additional vaults — gitignored. Each vault has its own wiki/ and raw/.
 ```
 
 ## Page Format
@@ -114,10 +121,54 @@ Triggered when the user asks to health-check the wiki.
 4. Suggest new sources or questions to investigate
 5. Append a lint entry to `wiki/log.md`
 
+## Environment Variables
+
+Required in `.env`:
+
+| Variable | Purpose | Required for |
+|---|---|---|
+| `MISTRAL_API_KEY` | Mistral chat model | Chat (Mistral) |
+| `GEMINI_API_KEY` | Gemini chat model | Chat (Gemini) |
+| `GOOGLE_CLOUD_STORAGE_BUCKET` | GCS bucket name | Backup |
+
+Claude chat uses the `claude` CLI subprocess — no API key needed.
+
 ## Testing
 
 - API tests: `bun test server.test.ts`
 - UI tests: `npx playwright test` (requires server running on port 5000)
+- Single UI test: `npx playwright test wiki.ui.test.ts`
+- Visual/debug: `npx playwright test --headed` or use Playwright CLI (`npx playwright open http://localhost:5000`)
+
+### Playwright CLI for Visual Testing
+
+Use `playwright-cli` (via the Skill tool) for interactive browser testing — navigating the UI, filling forms, taking screenshots, and verifying visual state. Useful for:
+- Verifying UI changes visually before committing
+- Debugging test failures by stepping through interactions
+- Taking screenshots of specific states for review
+
+### Monitor-Driven Test Workflows
+
+Use the Monitor tool for long-running test suites instead of blocking with Bash:
+
+```
+Monitor(
+  command: "bunx playwright test 2>&1 | grep --line-buffered -E '(FAIL|PASS|Error|✓|✗|passed|failed)'"
+  description: "playwright test results"
+  timeout_ms: 300000
+  persistent: false
+)
+```
+
+For watching the dev server during development:
+
+```
+Monitor(
+  command: "bun run server.ts 2>&1 | grep --line-buffered -iE '(error|listening|started)'"
+  description: "wiki server"
+  persistent: true
+)
+```
 
 ## Cross-Referencing Rules
 
