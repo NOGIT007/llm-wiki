@@ -11,6 +11,34 @@ import { withFileLock } from "./src/filelock";
 // Initial load
 await reloadAllVaults();
 
+function makeSlug(input: string): string {
+  return input
+    .replace(/^https?:\/\//, "")
+    .replace(/[^a-zA-Z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase()
+    .slice(0, 80);
+}
+
+async function fetchUrl(url: string): Promise<{ text: string; html: string }> {
+  const res = await fetch(url, { headers: { "User-Agent": "wiki-bot/1.0" } });
+  if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+  const html = await res.text();
+  const ct = res.headers.get("content-type") || "";
+  if (!ct.includes("text/html")) return { text: html, html: "" };
+  const text = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  return { text, html };
+}
+
 // MIME types for static file serving
 const MIME_TYPES: Record<string, string> = {
   ".html": "text/html",
@@ -250,7 +278,7 @@ const server = Bun.serve({
         return Response.json({ ok: true, filename }, { headers: NO_CACHE });
       }
 
-      const body = await req.json() as { filename?: string; content?: string; url?: string };
+      const body = await req.json() as { filename?: string; content?: string; url?: string; crawl?: boolean };
 
       if (body.url) {
         try {
@@ -265,14 +293,32 @@ const server = Bun.serve({
             || host === "169.254.169.254" || host.startsWith("169.254.")) {
             return Response.json({ error: "URLs pointing to private/internal addresses are not allowed" }, { status: 400 });
           }
-          const res = await fetch(body.url);
-          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-          const text = await res.text();
-          const slug = (body.filename || body.url)
-            .replace(/^https?:\/\//, "").replace(/[^a-zA-Z0-9-]/g, "-")
-            .replace(/-+/g, "-").replace(/^-|-$/g, "").toLowerCase().slice(0, 80);
+          const { text, html } = await fetchUrl(body.url);
+          const slug = makeSlug(body.filename || body.url);
           await writeFile(join(rawDir, `${slug}.md`), text, "utf-8");
-          return Response.json({ ok: true, filename: `${slug}.md` }, { headers: NO_CACHE });
+          const saved = [`${slug}.md`];
+
+          if (body.crawl && html) {
+            const origin = new URL(body.url).origin;
+            const hrefs = [...html.matchAll(/href=["']([^"'#?]+)/g)]
+              .map(m => m[1])
+              .map(href => href.startsWith("http") ? href : new URL(href, body.url).href)
+              .filter(href => href.startsWith(origin))
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .slice(0, 20);
+
+            for (const href of hrefs) {
+              try {
+                const { text: subText } = await fetchUrl(href);
+                const subSlug = makeSlug(href);
+                if (subSlug === slug) continue;
+                await writeFile(join(rawDir, `${subSlug}.md`), subText, "utf-8");
+                saved.push(`${subSlug}.md`);
+              } catch { /* skip failed sub-pages */ }
+            }
+          }
+
+          return Response.json({ ok: true, filename: saved[0], filenames: saved }, { headers: NO_CACHE });
         } catch (err: any) {
           return Response.json({ error: err.message }, { status: 400 });
         }

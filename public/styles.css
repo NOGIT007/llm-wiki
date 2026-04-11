@@ -1660,6 +1660,17 @@
   .add-submit:hover { filter: brightness(1.1); }
   .add-submit:disabled { opacity: 0.4; cursor: default; filter: none; }
 
+  .crawl-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    cursor: pointer;
+  }
+  .crawl-hint { color: var(--text-dim); }
+
   .add-status {
     margin-top: 12px;
     padding: 10px 14px;

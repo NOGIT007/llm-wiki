@@ -13,6 +13,7 @@ function closeAddSource() {
   document.getElementById('paste-content').value = '';
   document.getElementById('url-input').value = '';
   document.getElementById('url-filename').value = '';
+  document.getElementById('url-crawl').checked = false;
   clearFile();
 }
 
@@ -113,20 +114,35 @@ async function submitUpload() {
 async function submitUrl() {
   const url = document.getElementById('url-input').value.trim();
   const filename = document.getElementById('url-filename').value.trim();
+  const crawl = document.getElementById('url-crawl').checked;
   if (!url) { showStatus('url-status', 'Please enter a URL.', 'error'); return; }
 
+  showStatus('url-status', crawl ? 'Fetching and crawling...' : 'Fetching...', '');
   try {
     const res = await fetch(api('/api/raw'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ url, filename: filename || undefined }),
+      body: JSON.stringify({ url, filename: filename || undefined, crawl }),
     });
     const data = await res.json();
     if (data.ok) {
-      showStatus('url-status', `Fetched and saved as raw/${data.filename}`, 'success');
+      const filenames = data.filenames || [data.filename];
+      showStatus('url-status', `Saved ${filenames.length} file(s)`, 'success');
       document.getElementById('url-input').value = '';
       document.getElementById('url-filename').value = '';
-      await autoQueueAndSwitch(data.filename);
+      document.getElementById('url-crawl').checked = false;
+      for (const f of filenames) {
+        await fetch(api('/api/queue'), {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ action: 'ingest', target: f }),
+        });
+      }
+      setTimeout(() => {
+        closeAddSource();
+        showView('manage');
+        showToast(`${filenames.length} source(s) saved and queued for ingestion`);
+      }, 800);
     } else {
       showStatus('url-status', data.error || 'Fetch failed', 'error');
     }

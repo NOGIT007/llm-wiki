@@ -207,6 +207,9 @@
       <input type="text" class="add-input" id="url-input" placeholder="https://example.com/article">
       <label class="add-field-label">Filename (optional)</label>
       <input type="text" class="add-input" id="url-filename" placeholder="Auto-generated from URL">
+      <label class="crawl-label">
+        <input type="checkbox" id="url-crawl"> Crawl one level deep <span class="crawl-hint">(follows same-origin links, max 20)</span>
+      </label>
       <button class="add-submit" onclick="submitUrl()">Fetch &amp; Save to raw/</button>
       <div class="add-status" id="url-status"></div>
     </div>
