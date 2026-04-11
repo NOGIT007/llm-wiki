@@ -38,9 +38,9 @@ Three ways via the **+ Add Source** button:
 
 - **Paste** — paste markdown/text directly with a filename
 - **Upload** — drag & drop `.md`, `.txt`, or `.pdf` files
-- **URL** — fetch content from a URL
+- **URL** — fetch content from a URL; check **Crawl one level deep** to follow all same-origin links (up to 20 sub-pages) in one shot
 
-Sources land in `raw/` and are automatically queued for ingestion.
+Sources land in `raw/` and are automatically queued for ingestion. URL content is saved as clean readable text (HTML stripped).
 
 ## LLM Chat
 
@@ -65,6 +65,18 @@ Each vault is a self-contained knowledge base. The default vault uses `wiki/` + 
 ./wiki.sh status    # Check if running
 ```
 
+## WikiBar (macOS Menubar App)
+
+A native menubar companion for quick access without keeping a browser tab open.
+
+```bash
+cd WikiBar
+bash build.sh        # Build WikiBar.app
+bash setup.sh        # Install to /Applications
+```
+
+Shows server status (green/red dot), live page count, and queue depth. Start/Stop/Restart the wiki server and open it in a browser — all from the menubar.
+
 ## Directory Structure
 
 ```
@@ -74,6 +86,7 @@ vaults/           # Additional vaults (gitignored)
 public/           # Web UI
 server.ts         # Bun HTTP server
 wiki.sh           # Server control script
+WikiBar/          # macOS menubar app (Swift)
 .env              # API keys (gitignored)
 ```
 

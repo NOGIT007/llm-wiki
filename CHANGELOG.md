@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.16] — 2026-04-11
+
+![v0.16](changelogs/v0.16-the-menubar-manifesto.svg)
+
+### The Menubar Manifesto
+
+The one where the wiki gets a menubar companion, URLs learn to bring their friends, and HTML finally gets stripped before being saved.
+
+### Added
+- **WikiBar** (`WikiBar/`): macOS menubar app — status dot, live page + queue counts, Start/Stop/Restart controls, Open in Browser. Single Swift file compiled with `swiftc`, no Xcode or SPM. Falls back to `books.vertical` SF Symbol; drop a `menubar_icon.png` in the bundle for a custom icon. Build with `bash WikiBar/build.sh`, install with `bash WikiBar/setup.sh`.
+- **URL crawl**: Add Source → URL tab now has a "Crawl one level deep" checkbox. When checked, the server follows all same-origin links on the submitted page (max 20), saves each as a `.md` file in `raw/`, and queues all for ingestion in one shot.
+- **HTML → readable text**: URL fetches now strip `<script>`, `<style>`, and all HTML tags before saving — sources arrive as clean readable text instead of raw markup.
+
+### Changed
+- `POST /api/raw` returns `filenames[]` array (alongside existing `filename`) so callers can handle multi-file responses
+- Extracted `makeSlug()` and `fetchUrl()` helpers in `server.ts` — slug logic no longer duplicated inline
+
+---
+
 ## [0.15] — 2026-04-10
 
 ![v0.15](changelogs/v0.15-the-great-untangling.svg)
