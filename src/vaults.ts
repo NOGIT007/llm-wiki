@@ -77,8 +77,6 @@ export function getPages(vaultName?: string | null): Map<string, WikiPage> {
   return vaultPages.get(vaultName || "default") || new Map();
 }
 
-let lastLoad = Date.now();
-
 export async function reloadAllVaults() {
   vaultPages.set("default", await loadVault(DEFAULT_VAULT));
   if (existsSync(VAULTS_DIR)) {
@@ -88,11 +86,6 @@ export async function reloadAllVaults() {
       if (existsSync(v.wikiDir)) vaultPages.set(d, await loadVault(v));
     }
   }
-  lastLoad = Date.now();
-}
-
-export async function reloadIfNeeded() {
-  if (Date.now() - lastLoad > 5000) await reloadAllVaults();
 }
 
 export async function listVaults(): Promise<string[]> {

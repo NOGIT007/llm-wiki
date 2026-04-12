@@ -13,6 +13,7 @@ beforeAll(async () => {
     env: { ...process.env },
   });
   for (let i = 0; i < 30; i++) {
+    if (serverProc.exitCode !== null) throw new Error("Server process exited during startup");
     try {
       const res = await fetch(`${BASE}/api/status`);
       if (res.ok) break;
