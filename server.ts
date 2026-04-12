@@ -12,7 +12,7 @@ import { withFileLock } from "./src/filelock";
 await reloadAllVaults();
 
 // Periodically reload vaults in the background (every 10 seconds)
-setInterval(() => reloadAllVaults(), 10_000);
+setInterval(() => reloadAllVaults().catch(err => console.error("Background reload failed:", err)), 10_000);
 
 function makeSlug(input: string): string {
   return input
@@ -280,6 +280,7 @@ async function handleRaw(req: Request): Promise<Response> {
       if (!file) return Response.json({ error: "No file provided" }, { status: 400 });
       const filename = file.name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
       await writeFile(join(rawDir, filename), await file.text(), "utf-8");
+      await reloadAllVaults();
       return Response.json({ ok: true, filename }, { headers: NO_CACHE });
     }
 
@@ -323,6 +324,7 @@ async function handleRaw(req: Request): Promise<Response> {
           }
         }
 
+        await reloadAllVaults();
         return Response.json({ ok: true, filename: saved[0], filenames: saved }, { headers: NO_CACHE });
       } catch (err: any) {
         return Response.json({ error: err.message }, { status: 400 });
@@ -335,6 +337,7 @@ async function handleRaw(req: Request): Promise<Response> {
         .replace(/-+/g, "-").replace(/^-|-$/g, "");
       const safeName = filename.endsWith(".md") ? filename : `${filename}.md`;
       await writeFile(join(rawDir, safeName), body.content, "utf-8");
+      await reloadAllVaults();
       return Response.json({ ok: true, filename: safeName }, { headers: NO_CACHE });
     }
 
